@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { beginVote, castVote, getSnapshot, startGame } from "@/lib/game";
+import { beginVote, castVote, getSnapshot, startGame, submitClue, updateSettings } from "@/lib/game";
 import { getValidRoomCode } from "@/lib/room-code";
 import { getRoomPlayerId } from "@/lib/session";
 import { notifyRoomChanged } from "@/lib/realtime";
@@ -9,6 +9,8 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("start") }),
   z.object({ action: z.literal("beginVote") }),
   z.object({ action: z.literal("vote"), targetId: z.string().cuid() }),
+  z.object({ action: z.literal("clue"), content: z.string().trim().min(1).max(40) }),
+  z.object({ action: z.literal("settings"), wordCount: z.number().int().min(1).max(20), roundCount: z.number().int().min(1).max(10), turnSeconds: z.number().int().min(10).max(120), impostorCount: z.number().int().min(1).max(3) }),
 ]);
 
 async function getAuthorizedPlayer(code: string) {
@@ -39,6 +41,8 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
     if (parsed.data.action === "start") await startGame(code, playerId);
     if (parsed.data.action === "beginVote") await beginVote(code, playerId);
     if (parsed.data.action === "vote") await castVote(code, playerId, parsed.data.targetId);
+    if (parsed.data.action === "clue") await submitClue(code, playerId, parsed.data.content);
+    if (parsed.data.action === "settings") await updateSettings(code, playerId, parsed.data);
     notifyRoomChanged(code);
     return Response.json({ ok: true });
   } catch (error) {

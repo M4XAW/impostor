@@ -1,0 +1,26 @@
+ALTER TABLE "Room"
+  ADD COLUMN "wordCount" INTEGER NOT NULL DEFAULT 10,
+  ADD COLUMN "roundCount" INTEGER NOT NULL DEFAULT 3,
+  ADD COLUMN "turnSeconds" INTEGER NOT NULL DEFAULT 30,
+  ADD COLUMN "impostorCount" INTEGER NOT NULL DEFAULT 1,
+  ADD COLUMN "wordNumber" INTEGER NOT NULL DEFAULT 1,
+  ADD COLUMN "roundNumber" INTEGER NOT NULL DEFAULT 1,
+  ADD COLUMN "currentPlayerIndex" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN "turnEndsAt" TIMESTAMP(3);
+
+CREATE TABLE "Clue" (
+  "id" TEXT NOT NULL,
+  "content" TEXT NOT NULL,
+  "wordNumber" INTEGER NOT NULL,
+  "roundNumber" INTEGER NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "roomId" TEXT NOT NULL,
+  "playerId" TEXT NOT NULL,
+  CONSTRAINT "Clue_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "Clue_roomId_playerId_wordNumber_roundNumber_key" ON "Clue"("roomId", "playerId", "wordNumber", "roundNumber");
+CREATE INDEX "Clue_roomId_idx" ON "Clue"("roomId");
+
+ALTER TABLE "Clue" ADD CONSTRAINT "Clue_roomId_fkey" FOREIGN KEY ("roomId") REFERENCES "Room"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Clue" ADD CONSTRAINT "Clue_playerId_fkey" FOREIGN KEY ("playerId") REFERENCES "Player"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -25,10 +25,34 @@ model Room {
   phase       RoomPhase @default(LOBBY)
   hostId      String?
   secretWord  String?
+  wordCount   Int       @default(10)
+  roundCount  Int       @default(3)
+  turnSeconds Int       @default(30)
+  impostorCount Int     @default(1)
+  wordNumber  Int       @default(1)
+  roundNumber Int       @default(1)
+  currentPlayerIndex Int @default(0)
+  turnEndsAt  DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   players     Player[]
   votes       Vote[]
+  clues       Clue[]
+}
+
+model Clue {
+  id          String   @id @default(cuid())
+  content     String
+  wordNumber  Int
+  roundNumber Int
+  createdAt   DateTime @default(now())
+  roomId      String
+  playerId    String
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  player      Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, playerId, wordNumber, roundNumber])
+  @@index([roomId])
 }
 
 model Player {
@@ -41,6 +65,7 @@ model Player {
   room      Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
   votes     Vote[]     @relation("Voter")
   received  Vote[]     @relation("Target")
+  clues     Clue[]
 
   @@index([roomId])
 }
