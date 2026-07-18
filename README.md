@@ -1,6 +1,6 @@
 # Impostor
 
-Jeu web multijoueur de déduction sociale. Un joueur est l’imposteur et ne connaît pas le mot secret ; les autres doivent le démasquer avant la fin du vote.
+Tout le monde possède le même mot sauf une personne: c'est l'imposteur. L'imposteur lui même ne sait pas si il est l'imposteur, chacun à votre tour écrivez un mot pour prouver que vous n'êtes pas l'imposteur. L'imposteur gagne si il n'est pas le plus voté à la fin, sinon les autres joueurs gagnent.
 
 ## Prérequis
 
@@ -13,7 +13,7 @@ Jeu web multijoueur de déduction sociale. Un joueur est l’imposteur et ne con
 C’est la méthode recommandée : elle démarre l’application et PostgreSQL, applique les migrations, puis rend le jeu disponible sur [http://localhost:3000](http://localhost:3000).
 
 ```bash
-docker compose up --build
+docker compose up --build -d
 ```
 
 Pour arrêter les services :
