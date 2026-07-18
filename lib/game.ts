@@ -88,6 +88,15 @@ export async function castVote(code: string, voterId: string, targetId: string) 
   const room = await prisma.room.findUnique({ where: { code }, include: { players: true, votes: true } });
   if (!room || room.phase !== RoomPhase.VOTING || !room.players.some((player) => player.id === voterId) || !room.players.some((player) => player.id === targetId)) throw new Error("Vote invalide.");
   await prisma.vote.upsert({ where: { roomId_voterId: { roomId: room.id, voterId } }, create: { roomId: room.id, voterId, targetId }, update: { targetId } });
+  const votes = await prisma.vote.findMany({ where: { roomId: room.id } });
+  if (votes.length === room.players.length) {
+    const totals = new Map<string, number>();
+    votes.forEach((vote) => totals.set(vote.targetId, (totals.get(vote.targetId) ?? 0) + 1));
+    const highestScore = Math.max(...totals.values());
+    const mostVoted = new Set([...totals].filter(([, score]) => score === highestScore).map(([playerId]) => playerId));
+    const civiliansWin = room.players.some((player) => player.role === PlayerRole.IMPOSTOR && mostVoted.has(player.id));
+    await prisma.room.update({ where: { id: room.id }, data: { phase: RoomPhase.RESULTS, winner: civiliansWin ? "CIVILIANS" : "IMPOSTOR" } });
+  }
 }
 
 export async function getSnapshot(code: string, playerId: string): Promise<GameSnapshot | null> {
@@ -96,5 +105,5 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
   const currentPlayer = room?.players.find((player) => player.id === playerId);
   if (!room || !currentPlayer) return null;
   const currentTurnPlayer = room.players[room.currentPlayerIndex];
-  return { code: room.code, phase: room.phase, settings: { wordCount: room.wordCount, roundCount: room.roundCount, turnSeconds: room.turnSeconds, impostorCount: room.impostorCount }, turn: room.phase === RoomPhase.DISCUSSION && room.turnEndsAt && currentTurnPlayer ? { wordNumber: room.wordNumber, roundNumber: room.roundNumber, currentPlayerId: currentTurnPlayer.id, endsAt: room.turnEndsAt.toISOString(), canStartVote: room.roundNumber > 1 || room.wordNumber > 1 } : undefined, players: room.players.map((player) => ({ id: player.id, name: player.name, isHost: player.isHost, hasVoted: room.votes.some((vote) => vote.voterId === player.id) })), currentPlayer: { id: currentPlayer.id, name: currentPlayer.name, isHost: currentPlayer.isHost, word: room.phase === RoomPhase.LOBBY || currentPlayer.role === PlayerRole.IMPOSTOR ? undefined : room.secretWord ?? undefined }, clues: room.clues.map((clue) => ({ id: clue.id, playerId: clue.playerId, content: clue.content, playerName: clue.player.name, wordNumber: clue.wordNumber, roundNumber: clue.roundNumber })), votes: room.votes.map((vote) => ({ voterName: vote.voter.name, targetName: vote.target.name })) };
+  return { code: room.code, phase: room.phase, settings: { wordCount: room.wordCount, roundCount: room.roundCount, turnSeconds: room.turnSeconds, impostorCount: room.impostorCount }, turn: room.phase === RoomPhase.DISCUSSION && room.turnEndsAt && currentTurnPlayer ? { wordNumber: room.wordNumber, roundNumber: room.roundNumber, currentPlayerId: currentTurnPlayer.id, endsAt: room.turnEndsAt.toISOString(), canStartVote: room.roundNumber > 1 || room.wordNumber > 1 } : undefined, players: room.players.map((player) => ({ id: player.id, name: player.name, isHost: player.isHost, hasVoted: room.votes.some((vote) => vote.voterId === player.id) })), currentPlayer: { id: currentPlayer.id, name: currentPlayer.name, isHost: currentPlayer.isHost, word: room.phase === RoomPhase.LOBBY || currentPlayer.role === PlayerRole.IMPOSTOR ? undefined : room.secretWord ?? undefined }, clues: room.clues.map((clue) => ({ id: clue.id, playerId: clue.playerId, content: clue.content, playerName: clue.player.name, wordNumber: clue.wordNumber, roundNumber: clue.roundNumber })), votes: room.votes.map((vote) => ({ voterName: vote.voter.name, targetName: vote.target.name })), winner: room.winner === "CIVILIANS" || room.winner === "IMPOSTOR" ? room.winner : undefined };
 }
