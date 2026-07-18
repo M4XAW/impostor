@@ -24,7 +24,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <section id="accueil" className="grid flex-1 items-center gap-12 py-14 lg:grid-cols-[1.05fr_0.95fr] lg:py-20">
           <div className="max-w-2xl">
             <p className="mb-5 inline-flex rounded-full border border-orange-400/20 bg-orange-400/10 px-3 py-1 text-sm font-semibold text-orange-300">
-              De 3 à 10 joueurs
+              De 3 à 6 joueurs
             </p>
             <h1 className="text-5xl font-black leading-[0.95] tracking-tight text-white sm:text-6xl lg:text-7xl">
               Trouve l&apos;imposteur.
@@ -36,7 +36,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
             <div className="mt-10 grid max-w-lg grid-cols-3 gap-3 text-center text-sm">
               <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-4">
-                <strong className="block text-xl text-white">3–10</strong>
+                <strong className="block text-xl text-white">3–6</strong>
                 <span className="text-slate-400">joueurs</span>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-4">

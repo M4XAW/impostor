@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { io } from "socket.io-client";
+import { RoundGrid } from "@/components/round-grid";
 import type { GameSnapshot } from "@/types/game";
 
 interface RoomClientProps { code: string; }
@@ -75,7 +76,7 @@ export function RoomClient({ code }: RoomClientProps) {
   const secondsLeft = game.turn ? Math.max(0, Math.ceil((new Date(game.turn.endsAt).getTime() - now) / 1000)) : 0;
   const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerId === game.currentPlayer.id;
 
-  return <main className="min-h-screen bg-[#12151f] px-5 py-8 text-slate-100"><div className="mx-auto max-w-3xl"><header className="flex items-center justify-between"><Link href="/" className="font-black tracking-tight">IMPOSTOR</Link><span className="rounded-full bg-white/5 px-3 py-1 font-mono text-sm">{game.code}</span></header><section className="mt-8 rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8"><p className="text-sm font-bold uppercase tracking-widest text-orange-300">{game.phase === "LOBBY" ? "Salon" : game.phase === "DISCUSSION" ? "Tour en cours" : game.phase === "VOTING" ? "Vote" : "Résultats"}</p><h1 className="mt-2 text-3xl font-black">{game.phase === "LOBBY" ? "En attente des joueurs" : game.phase === "DISCUSSION" ? game.currentPlayer.role === "IMPOSTOR" ? "Tu es l’imposteur" : `Ton mot : ${game.currentPlayer.word}` : "Qui est l’imposteur ?"}</h1>
+  return <main className="min-h-screen bg-[#12151f] px-5 py-8 text-slate-100"><div className="mx-auto max-w-5xl"><header className="flex items-center justify-between"><Link href="/" className="font-black tracking-tight">IMPOSTOR</Link><span className="rounded-full bg-white/5 px-3 py-1 font-mono text-sm">{game.code}</span></header><section className="mt-8 rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8"><p className="text-sm font-bold uppercase tracking-widest text-orange-300">{game.phase === "LOBBY" ? "Salon" : game.phase === "DISCUSSION" ? "Tour en cours" : game.phase === "VOTING" ? "Vote" : "Résultats"}</p><h1 className="mt-2 text-3xl font-black">{game.phase === "LOBBY" ? "En attente des joueurs" : game.phase === "DISCUSSION" ? game.currentPlayer.word ? `Ton mot : ${game.currentPlayer.word}` : "Trouve les indices et reste discret" : "Qui est l’imposteur ?"}</h1>
 
   {game.phase === "DISCUSSION" && game.turn && <div className="mt-5 flex items-center justify-between rounded-2xl border border-orange-400/20 bg-orange-400/10 p-4"><div><p className="text-sm text-orange-200">À jouer maintenant</p><p className="font-bold">{currentTurnPlayer?.name}{canSubmitClue ? " — c’est toi" : ""}</p><p className="mt-1 text-sm text-slate-300">Mot {game.turn.wordNumber}/{game.settings.wordCount} · tour {game.turn.roundNumber}/{game.settings.roundCount}</p></div><strong className="text-3xl tabular-nums text-orange-300">{secondsLeft}s</strong></div>}
 
@@ -83,7 +84,7 @@ export function RoomClient({ code }: RoomClientProps) {
 
   {canSubmitClue && <form className="mt-6 flex gap-2" onSubmit={(event) => { event.preventDefault(); if (clue.trim()) { void play({ action: "clue", content: clue.trim() }); setClue(""); } }}><label className="sr-only" htmlFor="clue">Votre mot</label><input id="clue" value={clue} onChange={(event) => setClue(event.target.value)} maxLength={40} required className="min-w-0 flex-1 rounded-xl bg-white/10 px-4 py-3 outline-none ring-orange-400 focus:ring-2" placeholder="Saisis un mot qui ressemble…"/><button className="rounded-xl bg-orange-500 px-4 font-bold">Valider</button></form>}
 
-  {game.clues.length > 0 && <div className="mt-6"><h2 className="font-bold">Mots proposés</h2><ul className="mt-2 space-y-2">{game.clues.map((item) => <li key={item.id} className="rounded-xl bg-white/5 px-4 py-2 text-sm"><strong>{item.playerName}</strong> : {item.content}</li>)}</ul></div>}
+  {game.phase !== "LOBBY" && <RoundGrid game={game} />}
 
   <ul className="mt-7 space-y-2">{game.players.map((player) => <li key={player.id} className="flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3"><span className="min-w-0 flex-1 truncate">{player.name}{player.id === game.currentPlayer.id ? " (toi)" : ""}</span><span className="text-sm text-slate-400">{player.isHost ? "Hôte" : player.hasVoted ? "A voté" : ""}</span>{game.phase === "VOTING" && player.id !== game.currentPlayer.id && <button className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/20" onClick={() => void play({ action: "vote", targetId: player.id })}>Voter</button>}</li>)}</ul>
 
