@@ -42,7 +42,10 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
     if (parsed.data.action === "beginVote") await beginVote(code, playerId);
     if (parsed.data.action === "vote") await castVote(code, playerId, parsed.data.targetId);
     if (parsed.data.action === "clue") await submitClue(code, playerId, parsed.data.content);
-    if (parsed.data.action === "settings") await updateSettings(code, playerId, parsed.data);
+    if (parsed.data.action === "settings") {
+      const { wordCount, roundCount, turnSeconds, impostorCount } = parsed.data;
+      await updateSettings(code, playerId, { wordCount, roundCount, turnSeconds, impostorCount });
+    }
     notifyRoomChanged(code);
     return Response.json({ ok: true });
   } catch (error) {
