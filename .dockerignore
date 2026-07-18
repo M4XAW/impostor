@@ -1,0 +1,7 @@
+node_modules
+.next
+generated
+.pnpm-store
+.git
+.env
+coverage
