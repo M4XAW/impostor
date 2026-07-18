@@ -1,5 +1,6 @@
 import { GameEntry } from "@/components/game-entry";
 import { getValidRoomCode } from "@/lib/room-code";
+import Link from "next/link";
 
 export default async function Home({ searchParams }: PageProps<"/">) {
   const { join } = await searchParams;
@@ -10,12 +11,12 @@ export default async function Home({ searchParams }: PageProps<"/">) {
       <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_16%_18%,rgba(249,115,22,0.18),transparent_28%),radial-gradient(circle_at_84%_83%,rgba(168,85,247,0.18),transparent_30%)]" />
       <div className="mx-auto flex w-full max-w-6xl flex-col">
         <header className="flex items-center justify-between">
-          <a className="flex items-center gap-3" href="#accueil" aria-label="Impostor, accueil">
+          <Link className="flex items-center gap-3" href="/" aria-label="Impostor, accueil">
             <span className="grid size-10 place-items-center rounded-xl bg-orange-500 text-xl shadow-lg shadow-orange-950/40" aria-hidden="true">
               ◈
             </span>
             <span className="text-xl font-black tracking-tight">IMPOSTOR</span>
-          </a>
+          </Link>
           <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-300">
             Jeu entre amis
           </span>
