@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoomPhase {
+  LOBBY
+  DISCUSSION
+  VOTING
+  RESULTS
+}
+
+enum PlayerRole {
+  CIVILIAN
+  IMPOSTOR
+}
+
+model Room {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  phase       RoomPhase @default(LOBBY)
+  hostId      String?
+  secretWord  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  players     Player[]
+  votes       Vote[]
+}
+
+model Player {
+  id        String     @id @default(cuid())
+  name      String
+  role      PlayerRole @default(CIVILIAN)
+  isHost    Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  roomId    String
+  room      Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  votes     Vote[]     @relation("Voter")
+  received  Vote[]     @relation("Target")
+
+  @@index([roomId])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  roomId    String
+  voterId   String
+  targetId  String
+  createdAt DateTime @default(now())
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  voter     Player   @relation("Voter", fields: [voterId], references: [id], onDelete: Cascade)
+  target    Player   @relation("Target", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, voterId])
+  @@index([roomId])
+}
