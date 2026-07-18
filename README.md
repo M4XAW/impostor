@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Impostor
 
-## Getting Started
+Jeu web multijoueur de déduction sociale. Un joueur est l’imposteur et ne connaît pas le mot secret ; les autres doivent le démasquer avant la fin du vote.
 
-First, run the development server:
+## Prérequis
+
+- Node.js 22 ou une version plus récente
+- pnpm 10 (`corepack enable` permet de l’activer avec Node.js)
+- Docker Desktop et Docker Compose pour le démarrage le plus simple
+
+## Démarrage avec Docker
+
+C’est la méthode recommandée : elle démarre l’application et PostgreSQL, applique les migrations, puis rend le jeu disponible sur [http://localhost:3000](http://localhost:3000).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker compose up --build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Pour arrêter les services :
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+docker compose down
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Pour supprimer aussi les données locales PostgreSQL :
 
-## Learn More
+```bash
+docker compose down --volumes
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Développement local
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 1. Installer les dépendances
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+corepack enable
+pnpm install
+```
 
-## Deploy on Vercel
+Si pnpm vous demande d’autoriser les scripts de Prisma, sélectionnez Prisma et ses moteurs avec :
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+pnpm approve-builds
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 2. Démarrer PostgreSQL
+
+Vous pouvez utiliser uniquement le service de base de données fourni :
+
+```bash
+docker compose up -d db
+```
+
+### 3. Configurer l’environnement
+
+Copiez le fichier d’exemple :
+
+```bash
+cp .env.example .env
+```
+
+Sous PowerShell :
+
+```powershell
+Copy-Item .env.example .env
+```
+
+La valeur par défaut de `DATABASE_URL` cible la base PostgreSQL exposée sur `localhost:5432`.
+
+### 4. Générer Prisma et appliquer les migrations
+
+```bash
+pnpm prisma generate
+pnpm prisma migrate deploy
+```
+
+### 5. Lancer le serveur de développement
+
+```bash
+pnpm dev
+```
+
+Le serveur personnalisé démarre Next.js et Socket.IO sur [http://localhost:3000](http://localhost:3000).
+
+## Jouer une partie
+
+1. Créez une partie et choisissez un pseudo.
+2. Depuis le salon, copiez le lien d’invitation, par exemple `/?join=eUR-C7CDN`.
+3. Les autres joueurs rejoignent la partie avec ce lien et leur pseudo.
+4. À partir de trois joueurs, l’hôte lance la manche.
+5. Les civils reçoivent le mot secret, l’imposteur doit bluffer ; l’hôte ouvre ensuite le vote.
+
+## Commandes utiles
+
+```bash
+# Vérifier le style et les règles du projet
+pnpm lint
+
+# Construire l’application de production
+pnpm build
+
+# Générer le client Prisma après une modification de schéma
+pnpm prisma generate
+
+# Créer une nouvelle migration lors d’une évolution du schéma
+pnpm prisma migrate dev --name description_du_changement
+```
+
+## Architecture
+
+- `app/` : pages App Router et routes API
+- `components/` : composants d’interface
+- `lib/game.ts` : règles du jeu exécutées sur le serveur
+- `lib/session.ts` : association sécurisée d’un joueur à sa partie
+- `prisma/` : schéma PostgreSQL et migrations
+- `server.ts` : serveur Next.js + Socket.IO
+
+Les rôles, le mot secret, les votes et le résultat sont déterminés côté serveur. Le client ne reçoit que les informations qui le concernent.
