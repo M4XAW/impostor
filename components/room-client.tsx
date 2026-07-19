@@ -6,6 +6,10 @@ import { io } from "socket.io-client";
 import { RoundGrid } from "@/components/round-grid";
 import type { GameSnapshot } from "@/types/game";
 
+import { RiAddLine } from "@remixicon/react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "./ui/badge";
+
 interface RoomClientProps {
     code: string;
 }
@@ -18,11 +22,11 @@ const settingFields: Array<{
     min: number;
     max: number;
 }> = [
-    { name: "wordCount", label: "Nombre de mots", min: 1, max: 20 },
-    { name: "roundCount", label: "Tours par mot", min: 1, max: 10 },
-    { name: "turnSeconds", label: "Secondes par tour", min: 10, max: 120 },
-    { name: "impostorCount", label: "Imposteurs", min: 1, max: 3 },
-];
+        { name: "wordCount", label: "Nombre de mots", min: 1, max: 20 },
+        { name: "roundCount", label: "Tours par mot", min: 1, max: 10 },
+        { name: "turnSeconds", label: "Secondes par tour", min: 10, max: 120 },
+        { name: "impostorCount", label: "Imposteurs", min: 1, max: 3 },
+    ];
 
 function isGameSnapshot(value: unknown): value is GameSnapshot {
     return (
@@ -121,7 +125,7 @@ export function RoomClient({ code }: RoomClientProps) {
 
     if (error && !game) {
         return (
-            <main className="grid min-h-screen place-items-center bg-[#12151f] p-6 text-center text-white">
+            <main className="grid min-h-screen place-items-center p-6 text-center text-white">
                 <div>
                     <p>{error}</p>
                     <Link className="mt-4 inline-block text-orange-300 underline" href="/">
@@ -134,226 +138,217 @@ export function RoomClient({ code }: RoomClientProps) {
 
     if (!game) {
         return (
-            <main className="grid min-h-screen place-items-center bg-[#12151f] text-slate-300">
+            <main className="grid min-h-screen place-items-center text-slate-300">
                 Chargement…
             </main>
         );
     }
 
     const isHost = game.currentPlayer.isHost;
-    const currentTurnPlayer = game.turn
-        ? game.players.find((player) => player.id === game.turn?.currentPlayerId)
-        : undefined;
-    const secondsLeft = game.turn
-        ? Math.max(0, Math.ceil((new Date(game.turn.endsAt).getTime() - now) / 1000))
-        : 0;
-    const canSubmitClue =
-        game.phase === "DISCUSSION" &&
-        game.turn?.currentPlayerId === game.currentPlayer.id;
+    const currentTurnPlayer = game.turn ? game.players.find((player) => player.id === game.turn?.currentPlayerId) : undefined;
+    const secondsLeft = game.turn ? Math.max(0, Math.ceil((new Date(game.turn.endsAt).getTime() - now) / 1000)) : 0;
+    const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerId === game.currentPlayer.id;
 
     return (
-        <main className="min-h-screen bg-[#12151f] px-5 py-8 text-slate-100">
+        <main className="min-h-screen px-5 py-8 text-slate-100">
             <div className="mx-auto max-w-5xl">
                 <header className="flex items-center justify-between">
-                    <Link href="/" className="font-black tracking-tight">
-                        IMPOSTOR
-                    </Link>
-                    <span className="rounded-full bg-white/5 px-3 py-1 font-mono text-sm">
-                        {game.code}
-                    </span>
+                    <Link href="/" className="font-black tracking-tight">IMPOSTOR</Link>
+                    <span className="rounded-full bg-white/5 px-3 py-1 font-pixel text-sm">{game.code}</span>
+                    <Badge variant="secondary">{game.code}</Badge>
                 </header>
-
-                <section className="mt-8 rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8">
-                    <p className="text-sm font-bold uppercase tracking-widest text-orange-300">
-                        {game.phase === "LOBBY"
-                            ? "Salon"
-                            : game.phase === "DISCUSSION"
-                              ? "Tour en cours"
-                              : game.phase === "VOTING"
-                                ? "Vote"
-                                : "Résultats"}
-                    </p>
-
-                    <h1 className="mt-2 text-3xl font-black">
-                        {game.phase === "LOBBY"
-                            ? "En attente des joueurs"
-                            : game.phase === "DISCUSSION"
-                              ? `Ton mot : ${game.currentPlayer.word ?? "?"}`
-                              : game.phase === "RESULTS"
-                                ? game.winner === "CIVILIANS"
-                                    ? "Les autres joueurs gagnent"
-                                    : "L’imposteur gagne"
-                                : "Qui est l’imposteur ?"}
-                    </h1>
-
-                    {game.phase === "DISCUSSION" && game.turn && (
-                        <div className="mt-5 flex items-center justify-between rounded-2xl border border-orange-400/20 bg-orange-400/10 p-4">
-                            <div>
-                                <p className="text-sm text-orange-200">À jouer maintenant</p>
-                                <p className="font-bold">
-                                    {currentTurnPlayer?.name}
-                                    {canSubmitClue ? " — c’est toi" : ""}
-                                </p>
-                                <p className="mt-1 text-sm text-slate-300">
-                                    Mot {game.turn.wordNumber}/{game.settings.wordCount} · tour {game.turn.roundNumber}/{game.settings.roundCount}
-                                </p>
-                            </div>
-                            <strong className="text-3xl tabular-nums text-orange-300">
-                                {secondsLeft}s
-                            </strong>
-                        </div>
-                    )}
-
-                    {game.phase === "LOBBY" && (
-                        <div className="mt-6 space-y-4">
-                            <div className="rounded-2xl bg-white/5 p-4">
-                                <p className="text-sm text-slate-400">Lien d’invitation</p>
-                                <div className="mt-2 flex gap-2">
-                                    <code className="min-w-0 flex-1 truncate text-sm">
-                                        ?join={game.code}
-                                    </code>
-                                    <button
-                                        className="rounded-lg bg-violet-500 px-3 py-1.5 text-sm font-bold"
-                                        onClick={() => void copyInvite()}
-                                    >
-                                        {isCopied ? "Copié" : "Copier"}
-                                    </button>
-                                </div>
-                            </div>
-                            <Settings game={game} isHost={isHost} onSave={play} />
-                        </div>
-                    )}
-
-                    {canSubmitClue && (
-                        <form
-                            className="mt-6 flex gap-2"
-                            onSubmit={(event) => {
-                                event.preventDefault();
-
-                                if (clue.trim()) {
-                                    void play({ action: "clue", content: clue.trim() });
-                                    setClue("");
-                                }
-                            }}
-                        >
-                            <label className="sr-only" htmlFor="clue">
-                                Votre mot
-                            </label>
-                            <input
-                                id="clue"
-                                value={clue}
-                                onChange={(event) => setClue(event.target.value)}
-                                maxLength={40}
-                                required
-                                className="min-w-0 flex-1 rounded-xl bg-white/10 px-4 py-3 outline-none ring-orange-400 focus:ring-2"
-                                placeholder="Saisis un mot qui ressemble…"
-                            />
-                            <button className="rounded-xl bg-orange-500 px-4 font-bold">
-                                Valider
-                            </button>
-                        </form>
-                    )}
-
-                    {game.phase !== "LOBBY" && <RoundGrid game={game} />}
-
-                    {game.phase === "VOTING" && (
-                        <ul className="mt-7 space-y-2">
-                            {game.players.map((player) => (
-                                <li
-                                    key={player.id}
-                                    className="flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3"
-                                >
-                                    <span className="min-w-0 flex-1 truncate">
-                                        {player.name}
-                                        {player.id === game.currentPlayer.id ? " (toi)" : ""}
-                                    </span>
-                                    <span className="text-sm text-slate-400">
-                                        {player.hasVoted ? "A voté" : ""}
-                                    </span>
-                                    {player.id !== game.currentPlayer.id && (
-                                        <button
-                                            className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/20"
-                                            onClick={() =>
-                                                void play({
-                                                    action: "vote",
-                                                    targetId: player.id,
-                                                })
-                                            }
-                                        >
-                                            Voter
-                                        </button>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-
-                    {game.phase === "VOTING" && (
-                        <div className="mt-6">
-                            <h2 className="font-bold">Votes visibles</h2>
-                            {game.votes.length === 0 ? (
-                                <p className="mt-2 text-sm text-slate-400">
-                                    Aucun vote pour le moment.
-                                </p>
-                            ) : (
-                                <ul className="mt-2 space-y-2">
-                                    {game.votes.map((vote) => (
-                                        <li
-                                            key={`${vote.voterName}-${vote.targetName}`}
-                                            className="rounded-xl bg-white/5 px-4 py-2 text-sm"
-                                        >
-                                            <strong>{vote.voterName}</strong> a voté pour{" "}
-                                            <strong>{vote.targetName}</strong>
-                                        </li>
-                                    ))}
-                                </ul>
-                            )}
-                        </div>
-                    )}
-
-                    {error && (
-                        <p className="mt-4 text-sm text-rose-300" role="alert">
-                            {error}
+                <section className="flex justify-space-between gap-6 mt-8 rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8">
+                    <div className="flex-1">
+                        <p className="text-sm font-bold uppercase tracking-widest text-orange-300">
+                            {game.phase === "LOBBY" ? "Salon" :
+                                game.phase === "DISCUSSION" ? "Tour en cours"
+                                    : game.phase === "VOTING" ? "Vote" : "Résultats"}
                         </p>
-                    )}
 
-                    <div className="mt-7">
-                        {game.phase === "LOBBY" && isHost && (
-                            <button
-                                disabled={game.players.length < 3}
-                                className="rounded-xl bg-orange-500 px-5 py-3 font-bold disabled:opacity-40"
-                                onClick={() => void play({ action: "start" })}
-                            >
-                                Lancer la partie
-                            </button>
+                        <h1 className="mt-2 text-3xl font-black">
+                            {game.phase === "LOBBY"
+                                ? "En attente des joueurs"
+                                : game.phase === "DISCUSSION"
+                                    ? `Ton mot : ${game.currentPlayer.word ?? "?"}`
+                                    : game.phase === "RESULTS"
+                                        ? game.winner === "CIVILIANS"
+                                            ? "Les autres joueurs gagnent"
+                                            : "L’imposteur gagne" : "Qui est l’imposteur ?"}
+                        </h1>
+
+                        {game.phase === "DISCUSSION" && game.turn && (
+                            <div className="mt-5 flex items-center justify-between rounded-2xl border border-orange-400/20 bg-orange-400/10 p-4">
+                                <div>
+                                    <p className="text-sm text-orange-200">À jouer maintenant</p>
+                                    <p className="font-bold">
+                                        {currentTurnPlayer?.name}
+                                        {canSubmitClue ? " — c’est toi" : ""}
+                                    </p>
+                                    <p className="mt-1 text-sm text-slate-300">
+                                        Mot {game.turn.wordNumber}/{game.settings.wordCount} · tour {game.turn.roundNumber}/{game.settings.roundCount}
+                                    </p>
+                                </div>
+                                <strong className="text-3xl tabular-nums text-orange-300">
+                                    {secondsLeft}s
+                                </strong>
+                            </div>
                         )}
 
-                        {game.phase === "DISCUSSION" &&
-                            isHost &&
-                            game.turn?.canStartVote && (
+                        {game.phase === "LOBBY" && (
+                            <>
+                                <div className="mt-6 space-y-4">
+                                    <div className="rounded-2xl bg-white/5 p-4">
+                                        <p className="text-sm text-slate-400">Lien d’invitation</p>
+                                        <div className="mt-2 flex gap-2">
+                                            <code className="min-w-0 flex-1 truncate text-sm">
+                                                ?join={game.code}
+                                            </code>
+                                            <button
+                                                className="rounded-lg bg-violet-500 px-3 py-1.5 text-sm font-bold"
+                                                onClick={() => void copyInvite()}
+                                            >
+                                                {isCopied ? "Copié" : "Copier"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 mt-6 sm:grid">
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        aria-label="Copier le lien d'invitation"
+                                        onClick={() => void copyInvite()}
+                                    >
+                                        <RiAddLine />
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+
+                        {canSubmitClue && (
+                            <form
+                                className="mt-6 flex gap-2"
+                                onSubmit={(event) => {
+                                    event.preventDefault();
+
+                                    if (clue.trim()) {
+                                        void play({ action: "clue", content: clue.trim() });
+                                        setClue("");
+                                    }
+                                }}
+                            >
+                                <label className="sr-only" htmlFor="clue">
+                                    Votre mot
+                                </label>
+                                <input
+                                    id="clue"
+                                    value={clue}
+                                    onChange={(event) => setClue(event.target.value)}
+                                    maxLength={40}
+                                    required
+                                    className="min-w-0 flex-1 rounded-xl bg-white/10 px-4 py-3 outline-none ring-orange-400 focus:ring-2"
+                                    placeholder="Saisis un mot qui ressemble…"
+                                />
+                                <button className="rounded-xl bg-orange-500 px-4 font-bold">
+                                    Valider
+                                </button>
+                            </form>
+                        )}
+
+                        {game.phase !== "LOBBY" && <RoundGrid game={game} />}
+
+                        {game.phase === "VOTING" && (
+                            <ul className="mt-7 space-y-2">
+                                {game.players.map((player) => (
+                                    <li
+                                        key={player.id}
+                                        className="flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3"
+                                    >
+                                        <span className="min-w-0 flex-1 truncate">
+                                            {player.name}
+                                            {player.id === game.currentPlayer.id ? " (toi)" : ""}
+                                        </span>
+                                        <span className="text-sm text-slate-400">
+                                            {player.hasVoted ? "A voté" : ""}
+                                        </span>
+                                        {player.id !== game.currentPlayer.id && (
+                                            <button
+                                                className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/20"
+                                                onClick={() =>
+                                                    void play({
+                                                        action: "vote",
+                                                        targetId: player.id,
+                                                    })
+                                                }
+                                            >
+                                                Voter
+                                            </button>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+
+                        {game.phase === "VOTING" && (
+                            <div className="mt-6">
+                                <h2 className="font-bold">Votes visibles</h2>
+                                {game.votes.length === 0 ? (
+                                    <p className="mt-2 text-sm text-slate-400">
+                                        Aucun vote pour le moment.
+                                    </p>
+                                ) : (
+                                    <ul className="mt-2 space-y-2">
+                                        {game.votes.map((vote) => (
+                                            <li
+                                                key={`${vote.voterName}-${vote.targetName}`}
+                                                className="rounded-xl bg-white/5 px-4 py-2 text-sm"
+                                            >
+                                                <strong>{vote.voterName}</strong> a voté pour{" "}
+                                                <strong>{vote.targetName}</strong>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
+
+                        {error && (
+                            <p className="mt-4 text-sm text-rose-300" role="alert">
+                                {error}
+                            </p>
+                        )}
+
+                        <div className="mt-7">
+                            {game.phase === "LOBBY" && isHost && (
                                 <button
-                                    className="rounded-xl bg-violet-500 px-5 py-3 font-bold"
-                                    onClick={() => void play({ action: "beginVote" })}
+                                    disabled={game.players.length < 3}
+                                    className="rounded-xl bg-orange-500 px-5 py-3 font-bold disabled:opacity-40"
+                                    onClick={() => void play({ action: "start" })}
                                 >
-                                    Passer au vote
+                                    Lancer la partie
                                 </button>
                             )}
+
+                            {game.phase === "DISCUSSION" &&
+                                isHost &&
+                                game.turn?.canStartVote && (
+                                    <button
+                                        className="rounded-xl bg-violet-500 px-5 py-3 font-bold"
+                                        onClick={() => void play({ action: "beginVote" })}
+                                    >
+                                        Passer au vote
+                                    </button>
+                                )}
+                        </div>
                     </div>
+                    <Settings game={game} isHost={isHost} onSave={play} />
                 </section>
             </div>
         </main>
     );
 }
 
-function Settings({
-    game,
-    isHost,
-    onSave,
-}: {
-    game: GameSnapshot;
-    isHost: boolean;
-    onSave: (payload: Record<string, unknown>) => Promise<void>;
-}) {
+function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolean; onSave: (payload: Record<string, unknown>) => Promise<void> }) {
     if (!isHost) {
         return (
             <div className="rounded-2xl border border-white/10 p-4 text-sm text-slate-300">
@@ -385,7 +380,7 @@ function Settings({
         >
             <h2 className="font-bold">Paramètres de partie</h2>
 
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
                 {settingFields.map((field) => (
                     <label key={field.name} className="text-slate-300">
                         {field.label}
