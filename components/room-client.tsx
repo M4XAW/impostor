@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { io } from "socket.io-client";
+import { FullScreenLoader } from "@/components/full-screen-loader";
 import { RoundGrid } from "@/components/round-grid";
 import type { GameSnapshot } from "@/types/game";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldLabel } from "@/components/ui/field";
-import { RiAddLine } from "@remixicon/react";
 import {
     NumberField,
     NumberFieldDecrement,
@@ -17,6 +17,9 @@ import {
     NumberFieldIncrement,
     NumberFieldInput,
 } from "@/components/number-field"
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+
+import { RiArrowRightUpLine } from "@remixicon/react";
 
 interface RoomClientProps {
     code: string;
@@ -145,25 +148,23 @@ export function RoomClient({ code }: RoomClientProps) {
     }
 
     if (!game) {
-        return (
-            <main className="grid min-h-screen place-items-center text-slate-300">
-                Chargement…
-            </main>
-        );
+        return <FullScreenLoader label="Chargement de la partie" />;
     }
 
     const isHost = game.currentPlayer.isHost;
     const currentTurnPlayer = game.turn ? game.players.find((player) => player.id === game.turn?.currentPlayerId) : undefined;
     const secondsLeft = game.turn ? Math.max(0, Math.ceil((new Date(game.turn.endsAt).getTime() - now) / 1000)) : 0;
     const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerId === game.currentPlayer.id;
+    const canStartGame = game.phase === "LOBBY" && isHost;
+    const canBeginVote = game.phase === "DISCUSSION" && isHost && game.turn?.canStartVote === true;
 
     return (
-        <main className="px-5 pb-8 text-slate-100">
-            <div className="mx-auto max-w-5xl">
-                <section className="flex justify-space-between gap-6 rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8">
-                    <div className="flex-1">
+        <main className="mx-auto w-full max-w-7xl px-5 pb-12 sm:px-8 lg:px-12">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+                <Card className="flex-1">
+                    <CardContent>
                         <div className="flex items-center justify-between gap-4">
-                            <p className="text-sm font-bold uppercase tracking-widest text-orange-300">
+                            <p className="text-sm uppercase tracking-widest text-orange-300">
                                 {game.phase === "LOBBY" ? "Salon" :
                                     game.phase === "DISCUSSION" ? "Tour en cours"
                                         : game.phase === "VOTING" ? "Vote" : "Résultats"}
@@ -171,7 +172,7 @@ export function RoomClient({ code }: RoomClientProps) {
                             <Badge variant="secondary">{game.code}</Badge>
                         </div>
 
-                        <h1 className="mt-2 text-3xl font-black">
+                        <h1 className="mt-2 text-3xl">
                             {game.phase === "LOBBY"
                                 ? "En attente des joueurs"
                                 : game.phase === "DISCUSSION"
@@ -183,14 +184,14 @@ export function RoomClient({ code }: RoomClientProps) {
                         </h1>
 
                         {game.phase === "DISCUSSION" && game.turn && (
-                            <div className="mt-5 flex items-center justify-between rounded-2xl border border-orange-400/20 bg-orange-400/10 p-4">
+                            <div className="mt-5 flex items-center justify-between border border-orange-400/20 bg-orange-400/10 p-4">
                                 <div>
                                     <p className="text-sm text-orange-200">À jouer maintenant</p>
-                                    <p className="font-bold">
+                                    <p>
                                         {currentTurnPlayer?.name}
                                         {canSubmitClue ? " — c’est toi" : ""}
                                     </p>
-                                    <p className="mt-1 text-sm text-slate-300">
+                                    <p className="mt-1 text-sm text-foreground">
                                         Mot {game.turn.wordNumber}/{game.settings.wordCount} · tour {game.turn.roundNumber}/{game.settings.roundCount}
                                     </p>
                                 </div>
@@ -203,30 +204,29 @@ export function RoomClient({ code }: RoomClientProps) {
                         {game.phase === "LOBBY" && (
                             <>
                                 <div className="mt-6 space-y-4">
-                                    <div className="rounded-2xl bg-white/5 p-4">
-                                        <p className="text-sm text-slate-400">Lien d’invitation</p>
-                                        <div className="mt-2 flex gap-2">
-                                            <code className="min-w-0 flex-1 truncate text-sm">
-                                                ?join={game.code}
-                                            </code>
-                                            <Button
-                                                onClick={() => void copyInvite()}
-                                            >
-                                                {isCopied ? "Copié" : "Copier"}
-                                            </Button>
-                                        </div>
+                                    <div className="flex gap-2 p-4 border bg-muted">
+                                        <code className="min-w-0 flex-1 truncate text-sm">
+                                            <p className="text-sm text-muted-foreground">Lien d’invitation</p>
+                                            {game.code}
+                                        </code>
+                                        <Button onClick={() => void copyInvite()}>
+                                            {isCopied ? "Copié" : "Copier"}
+                                        </Button>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4 mt-6 sm:grid">
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        aria-label="Copier le lien d'invitation"
-                                        onClick={() => void copyInvite()}
-                                    >
-                                        <RiAddLine />
-                                    </Button>
-                                </div>
+                                <ul
+                                    className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"
+                                    aria-label="Joueurs du salon"
+                                >
+                                    {game.players.map((player) => (
+                                        <li
+                                            key={player.id}
+                                            className="grid aspect-square min-w-0 place-items-center border bg-muted p-3 text-center"
+                                        >
+                                            <span className="max-w-full wrap-anywhere">{player.name}</span>
+                                        </li>
+                                    ))}
+                                </ul>
                             </>
                         )}
 
@@ -251,10 +251,10 @@ export function RoomClient({ code }: RoomClientProps) {
                                     onChange={(event) => setClue(event.target.value)}
                                     maxLength={40}
                                     required
-                                    className="min-w-0 flex-1 rounded-xl bg-white/10 px-4 py-3 outline-none ring-orange-400 focus:ring-2"
+                                    className="min-w-0 flex-1 bg-white/10 px-4 py-3 outline-none ring-orange-400 focus:ring-2"
                                     placeholder="Saisis un mot qui ressemble…"
                                 />
-                                <Button className="rounded-xl bg-orange-500 px-4 font-bold">
+                                <Button className="bg-orange-500 px-4">
                                     Valider
                                 </Button>
                             </form>
@@ -267,18 +267,18 @@ export function RoomClient({ code }: RoomClientProps) {
                                 {game.players.map((player) => (
                                     <li
                                         key={player.id}
-                                        className="flex items-center gap-3 rounded-xl border border-white/10 px-4 py-3"
+                                        className="flex items-center gap-3 border  px-4 py-3"
                                     >
                                         <span className="min-w-0 flex-1 truncate">
                                             {player.name}
                                             {player.id === game.currentPlayer.id ? " (toi)" : ""}
                                         </span>
-                                        <span className="text-sm text-slate-400">
+                                        <span className="text-sm text-muted-foreground">
                                             {player.hasVoted ? "A voté" : ""}
                                         </span>
                                         {player.id !== game.currentPlayer.id && (
                                             <Button
-                                                className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/20"
+                                                className="bg-white/10 px-3 py-1 text-sm hover:bg-white/20"
                                                 onClick={() =>
                                                     void play({
                                                         action: "vote",
@@ -296,9 +296,9 @@ export function RoomClient({ code }: RoomClientProps) {
 
                         {game.phase === "VOTING" && (
                             <div className="mt-6">
-                                <h2 className="font-bold">Votes visibles</h2>
+                                <h2>Votes visibles</h2>
                                 {game.votes.length === 0 ? (
-                                    <p className="mt-2 text-sm text-slate-400">
+                                    <p className="mt-2 text-sm text-muted-foreground">
                                         Aucun vote pour le moment.
                                     </p>
                                 ) : (
@@ -306,7 +306,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                         {game.votes.map((vote) => (
                                             <li
                                                 key={`${vote.voterName}-${vote.targetName}`}
-                                                className="rounded-xl bg-white/5 px-4 py-2 text-sm"
+                                                className="bg-muted px-4 py-2 text-sm"
                                             >
                                                 <strong>{vote.voterName}</strong> a voté pour{" "}
                                                 <strong>{vote.targetName}</strong>
@@ -320,30 +320,34 @@ export function RoomClient({ code }: RoomClientProps) {
                         {error && (
                             <p className="mt-4 text-sm text-rose-300" role="alert">{error}</p>
                         )}
-
-                        <div className="mt-7">
-                            {game.phase === "LOBBY" && isHost && (
+                    </CardContent>
+                    {(canStartGame || canBeginVote) && (
+                        <CardFooter>
+                            {canStartGame && (
                                 <Button
                                     onClick={() => void play({ action: "start" })}
                                     disabled={game.players.length < 3}
                                 >
                                     Lancer la partie
+                                    <RiArrowRightUpLine />
                                 </Button>
                             )}
 
-                            {game.phase === "DISCUSSION" &&
-                                isHost &&
-                                game.turn?.canStartVote && (
-                                    <Button
-                                        onClick={() => void play({ action: "beginVote" })}
-                                    >
-                                        Passer au vote
-                                    </Button>
-                                )}
-                        </div>
-                    </div>
-                    <Settings game={game} isHost={isHost} onSave={play} />
-                </section>
+                            {canBeginVote && (
+                                <Button
+                                    onClick={() => void play({ action: "beginVote" })}
+                                >
+                                    Passer au vote
+                                </Button>
+                            )}
+                        </CardFooter>
+                    )}
+                </Card>
+                <Card>
+                    <CardContent>
+                        <Settings game={game} isHost={isHost} onSave={play} />
+                    </CardContent>
+                </Card>
             </div>
         </main>
     );
@@ -353,8 +357,7 @@ function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolea
     const settingsKey = `${game.settings.wordCount}-${game.settings.roundCount}-${game.settings.turnSeconds}-${game.settings.impostorCount}`;
     const settingsContent = (
         <>
-            <h2 className="font-bold">Paramètres de partie</h2>
-
+            <h2>Paramètres de partie</h2>
             <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
                 {settingFields.map((field) => (
                     <Field key={field.name}>
@@ -375,25 +378,15 @@ function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolea
                     </Field>
                 ))}
             </div>
-
-            <Button type={isHost ? "submit" : "button"} className="mt-5 w-full" disabled={!isHost}>
-                Enregistrer
-            </Button>
         </>
     );
 
-    if (!isHost) {
-        return (
-            <div key={settingsKey} className="rounded-2xl border border-white/10 p-4">
-                {settingsContent}
-            </div>
-        );
-    }
+    if (!isHost) return <div key={settingsKey} className="w-full lg:w-72 lg:shrink-0">{settingsContent}</div>
 
     return (
         <form
             key={settingsKey}
-            className="rounded-2xl border border-white/10 p-4"
+            className="w-full lg:w-72 lg:shrink-0"
             onSubmit={(event) => {
                 event.preventDefault();
                 const data = new FormData(event.currentTarget);
@@ -408,6 +401,7 @@ function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolea
             }}
         >
             {settingsContent}
+            <Button type="submit" className="mt-5 w-full" disabled={!isHost}>Enregistrer</Button>
         </form>
     );
 }

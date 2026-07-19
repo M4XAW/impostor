@@ -28,7 +28,7 @@ export default function RootLayout({
                     <span aria-hidden="true" className="pointer-events-none absolute -right-1.25 -bottom-1.25 z-20 size-2.25 border border-dotted border-border bg-background" />
                     <div
                         aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 bg-[radial-gradient(currentColor_1px,transparent_1px)] bg-size-[22px_22px] text-border/60"
+                        className="pointer-events-none absolute inset-0 bg-[radial-gradient(currentColor_1px,transparent_1px)] bg-size-[22px_22px] text-border/60 -z-1"
                     />
                     <div
                         aria-hidden="true"
@@ -38,9 +38,7 @@ export default function RootLayout({
                         {`//v${appPackage.version}`}
                     </small>
                     <Header />
-                    <div className="relative z-10 flex flex-1 flex-col">
-                        {children}
-                    </div>
+                    {children}
                 </div>
 
             </body>

@@ -1,13 +1,33 @@
-import { PlayerRole, RoomPhase } from "@/generated/prisma/client";
+import { PlayerRole, Prisma, RoomPhase } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GameSnapshot } from "@/types/game";
 
-const WORDS = ["Volcan", "Cinéma", "Pirate", "Boussole", "Piano", "Jungle", "Astronaute", "Chocolat", "Phare", "Désert", "Lune", "Train", "Fusée", "Montagne", "Océan", "Bibliothèque", "Robot", "Forêt", "Musée", "Tempête"];
+const MAX_ROOM_CODE_ATTEMPTS = 5;
 
 export interface RoomSettings { wordCount: number; roundCount: number; turnSeconds: number; impostorCount: number; }
 
-function randomWord(wordNumber: number) { return WORDS[(wordNumber - 1) % WORDS.length]; }
 function isHost(players: Array<{ id: string; isHost: boolean }>, playerId: string) { return players.some((player) => player.id === playerId && player.isHost); }
+
+function shuffle<T>(items: readonly T[]) {
+  const shuffledItems = [...items];
+
+  for (let index = shuffledItems.length - 1; index > 0; index -= 1) {
+    const randomValue = crypto.getRandomValues(new Uint32Array(1))[0];
+    const randomIndex = randomValue % (index + 1);
+    [shuffledItems[index], shuffledItems[randomIndex]] = [shuffledItems[randomIndex], shuffledItems[index]];
+  }
+
+  return shuffledItems;
+}
+
+function normalizeClueContent(content: string) {
+  return content
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLocaleLowerCase("fr")
+    .match(/[\p{L}\p{N}]+/gu)
+    ?.join(" ") ?? "";
+}
 
 export function createRoomCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -16,10 +36,18 @@ export function createRoomCode() {
 }
 
 export async function createRoom(name: string) {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < MAX_ROOM_CODE_ATTEMPTS; attempt += 1) {
     try {
       return await prisma.room.create({ data: { code: createRoomCode(), players: { create: { name, isHost: true } } }, include: { players: true } });
-    } catch { /* A collision is retried. */ }
+    } catch (error) {
+      const isRoomCodeCollision =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002";
+
+      if (!isRoomCodeCollision) {
+        throw error;
+      }
+    }
   }
   throw new Error("Impossible de créer une partie pour le moment.");
 }
@@ -43,12 +71,27 @@ export async function startGame(code: string, playerId: string) {
   if (!room || !isHost(room.players, playerId)) throw new Error("Action non autorisée.");
   if (room.phase !== RoomPhase.LOBBY || room.players.length < 3) throw new Error("Il faut au moins trois joueurs pour démarrer.");
   if (room.impostorCount > room.players.length - 2) throw new Error("Le nombre d’imposteurs est trop élevé.");
-  const impostors = [...room.players].sort(() => Math.random() - 0.5).slice(0, room.impostorCount);
+  const availableWordPairs = await prisma.wordPair.findMany({
+    where: { isActive: true },
+    select: { id: true, civilianWord: true, impostorWord: true },
+  });
+  if (availableWordPairs.length < room.wordCount) throw new Error("Il n’y a pas assez de paires de mots actives pour démarrer cette partie.");
+  const selectedWordPairs = shuffle(availableWordPairs).slice(0, room.wordCount);
+  const impostors = shuffle(room.players).slice(0, room.impostorCount);
   const turnEndsAt = new Date(Date.now() + room.turnSeconds * 1000);
   await prisma.$transaction([
     prisma.player.updateMany({ where: { roomId: room.id }, data: { role: PlayerRole.CIVILIAN } }),
     ...impostors.map((player) => prisma.player.update({ where: { id: player.id }, data: { role: PlayerRole.IMPOSTOR } })),
-    prisma.room.update({ where: { id: room.id }, data: { phase: RoomPhase.DISCUSSION, secretWord: randomWord(1), wordNumber: 1, roundNumber: 1, currentPlayerIndex: 0, turnEndsAt } }),
+    prisma.roomWord.createMany({
+      data: selectedWordPairs.map((wordPair, index) => ({
+        roomId: room.id,
+        sourceWordPairId: wordPair.id,
+        wordNumber: index + 1,
+        civilianWord: wordPair.civilianWord,
+        impostorWord: wordPair.impostorWord,
+      })),
+    }),
+    prisma.room.update({ where: { id: room.id }, data: { phase: RoomPhase.DISCUSSION, wordNumber: 1, roundNumber: 1, currentPlayerIndex: 0, turnEndsAt } }),
   ]);
 }
 
@@ -63,14 +106,23 @@ async function synchronizeTurn(code: string) {
     return prisma.room.update({ where: { id: room.id }, data: { phase: RoomPhase.VOTING, turnEndsAt: null } });
   }
   const newRound = completedRound && nextRound > room.roundCount ? 1 : nextRound;
-  return prisma.room.update({ where: { id: room.id }, data: { currentPlayerIndex: completedRound ? 0 : nextIndex, roundNumber: newRound, wordNumber: nextWord, secretWord: nextWord !== room.wordNumber ? randomWord(nextWord) : room.secretWord, turnEndsAt: new Date(Date.now() + room.turnSeconds * 1000) } });
+  return prisma.room.update({ where: { id: room.id }, data: { currentPlayerIndex: completedRound ? 0 : nextIndex, roundNumber: newRound, wordNumber: nextWord, turnEndsAt: new Date(Date.now() + room.turnSeconds * 1000) } });
 }
 
 export async function submitClue(code: string, playerId: string, content: string) {
   const room = await synchronizeTurn(code);
   const players = await prisma.player.findMany({ where: { roomId: room?.id }, orderBy: { createdAt: "asc" } });
   if (!room || room.phase !== RoomPhase.DISCUSSION || players[room.currentPlayerIndex]?.id !== playerId) throw new Error("Ce n'est pas votre tour.");
-  await prisma.clue.create({ data: { roomId: room.id, playerId, content, wordNumber: room.wordNumber, roundNumber: room.roundNumber } });
+  const normalizedContent = normalizeClueContent(content);
+  if (!normalizedContent) throw new Error("Saisis un mot contenant au moins une lettre ou un chiffre.");
+  try {
+    await prisma.clue.create({ data: { roomId: room.id, playerId, content: content.trim(), normalizedContent, wordNumber: room.wordNumber, roundNumber: room.roundNumber } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new Error("Ce mot a déjà été proposé pendant cette manche.");
+    }
+    throw error;
+  }
   await prisma.room.update({ where: { id: room.id }, data: { turnEndsAt: new Date(0) } });
   await synchronizeTurn(code);
 }
@@ -101,9 +153,10 @@ export async function castVote(code: string, voterId: string, targetId: string) 
 
 export async function getSnapshot(code: string, playerId: string): Promise<GameSnapshot | null> {
   await synchronizeTurn(code);
-  const room = await prisma.room.findUnique({ where: { code }, include: { players: { orderBy: { createdAt: "asc" } }, votes: { include: { voter: true, target: true } }, clues: { include: { player: true }, orderBy: { createdAt: "asc" } } } });
+  const room = await prisma.room.findUnique({ where: { code }, include: { players: { orderBy: { createdAt: "asc" } }, votes: { include: { voter: true, target: true } }, clues: { include: { player: true }, orderBy: { createdAt: "asc" } }, words: { orderBy: { wordNumber: "asc" } } } });
   const currentPlayer = room?.players.find((player) => player.id === playerId);
   if (!room || !currentPlayer) return null;
   const currentTurnPlayer = room.players[room.currentPlayerIndex];
-  return { code: room.code, phase: room.phase, settings: { wordCount: room.wordCount, roundCount: room.roundCount, turnSeconds: room.turnSeconds, impostorCount: room.impostorCount }, turn: room.phase === RoomPhase.DISCUSSION && room.turnEndsAt && currentTurnPlayer ? { wordNumber: room.wordNumber, roundNumber: room.roundNumber, currentPlayerId: currentTurnPlayer.id, endsAt: room.turnEndsAt.toISOString(), canStartVote: room.roundNumber > 1 || room.wordNumber > 1 } : undefined, players: room.players.map((player) => ({ id: player.id, name: player.name, isHost: player.isHost, hasVoted: room.votes.some((vote) => vote.voterId === player.id) })), currentPlayer: { id: currentPlayer.id, name: currentPlayer.name, isHost: currentPlayer.isHost, word: room.phase === RoomPhase.LOBBY || currentPlayer.role === PlayerRole.IMPOSTOR ? undefined : room.secretWord ?? undefined }, clues: room.clues.map((clue) => ({ id: clue.id, playerId: clue.playerId, content: clue.content, playerName: clue.player.name, wordNumber: clue.wordNumber, roundNumber: clue.roundNumber })), votes: room.votes.map((vote) => ({ voterName: vote.voter.name, targetName: vote.target.name })), winner: room.winner === "CIVILIANS" || room.winner === "IMPOSTOR" ? room.winner : undefined };
+  const currentWord = room.words.find((word) => word.wordNumber === room.wordNumber);
+  return { code: room.code, phase: room.phase, settings: { wordCount: room.wordCount, roundCount: room.roundCount, turnSeconds: room.turnSeconds, impostorCount: room.impostorCount }, turn: room.phase === RoomPhase.DISCUSSION && room.turnEndsAt && currentTurnPlayer ? { wordNumber: room.wordNumber, roundNumber: room.roundNumber, currentPlayerId: currentTurnPlayer.id, endsAt: room.turnEndsAt.toISOString(), canStartVote: room.roundNumber > 1 || room.wordNumber > 1 } : undefined, players: room.players.map((player) => ({ id: player.id, name: player.name, isHost: player.isHost, hasVoted: room.votes.some((vote) => vote.voterId === player.id) })), currentPlayer: { id: currentPlayer.id, name: currentPlayer.name, isHost: currentPlayer.isHost, word: room.phase === RoomPhase.LOBBY ? undefined : currentPlayer.role === PlayerRole.IMPOSTOR ? currentWord?.impostorWord : currentWord?.civilianWord }, clues: room.clues.map((clue) => ({ id: clue.id, playerId: clue.playerId, content: clue.content, playerName: clue.player.name, wordNumber: clue.wordNumber, roundNumber: clue.roundNumber })), votes: room.votes.map((vote) => ({ voterName: vote.voter.name, targetName: vote.target.name })), winner: room.winner === "CIVILIANS" || room.winner === "IMPOSTOR" ? room.winner : undefined };
 }

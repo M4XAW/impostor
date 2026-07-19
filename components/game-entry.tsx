@@ -122,7 +122,7 @@ export function GameEntry({ joinCode }: GameEntryProps) {
                 </form>
             </CardContent>
 
-            {message && <p className="mt-5 min-h-5 text-center text-sm text-orange-300" aria-live="polite">{message}</p>}
+            {message && <p className="text-center text-sm text-orange-300" aria-live="polite">{message}</p>}
         </Card>
     );
 }

@@ -1,6 +1,6 @@
 # Impostor
 
-Tout le monde possède le même mot sauf une personne: c'est l'imposteur. L'imposteur lui même ne sait pas si il est l'imposteur, chacun à votre tour écrivez un mot pour prouver que vous n'êtes pas l'imposteur. L'imposteur gagne si il n'est pas le plus voté à la fin, sinon les autres joueurs gagnent.
+Tout le monde reçoit un mot, mais l'imposteur reçoit un mot légèrement différent sans savoir qu'il est l'imposteur. Chacun à votre tour, écrivez un indice encore jamais proposé pendant la manche pour prouver que vous n'êtes pas l'imposteur. L'imposteur gagne s'il n'est pas le plus voté à la fin, sinon les autres joueurs gagnent.
 
 ## Prérequis
 
@@ -88,7 +88,7 @@ Le serveur personnalisé démarre Next.js et Socket.IO sur [http://localhost:300
 2. Depuis le salon, copiez le lien d’invitation, par exemple `/?join=eUR-C7CDN`.
 3. Les autres joueurs rejoignent la partie avec ce lien et leur pseudo.
 4. À partir de trois joueurs, l’hôte lance la manche.
-5. Les civils reçoivent le mot secret, l’imposteur doit bluffer ; l’hôte ouvre ensuite le vote.
+5. Les civils et l’imposteur reçoivent chacun leur mot, puis l’hôte ouvre le vote après les échanges d’indices.
 
 ## Commandes utiles
 

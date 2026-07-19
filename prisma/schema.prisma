@@ -20,39 +20,71 @@ enum PlayerRole {
 }
 
 model Room {
-  id          String    @id @default(cuid())
-  code        String    @unique
-  phase       RoomPhase @default(LOBBY)
-  hostId      String?
-  secretWord  String?
-  wordCount   Int       @default(10)
-  roundCount  Int       @default(3)
-  turnSeconds Int       @default(30)
-  impostorCount Int     @default(1)
-  wordNumber  Int       @default(1)
-  roundNumber Int       @default(1)
-  currentPlayerIndex Int @default(0)
-  turnEndsAt  DateTime?
-  winner      String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  players     Player[]
-  votes       Vote[]
-  clues       Clue[]
+  id                 String     @id @default(cuid())
+  code               String     @unique
+  phase              RoomPhase  @default(LOBBY)
+  hostId             String?
+  wordCount          Int        @default(10)
+  roundCount         Int        @default(3)
+  turnSeconds        Int        @default(30)
+  impostorCount      Int        @default(1)
+  wordNumber         Int        @default(1)
+  roundNumber        Int        @default(1)
+  currentPlayerIndex Int        @default(0)
+  turnEndsAt         DateTime?
+  winner             String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  players            Player[]
+  votes              Vote[]
+  clues              Clue[]
+  words              RoomWord[]
+}
+
+model WordPair {
+  id                     String     @id @default(cuid())
+  civilianWord           String
+  impostorWord           String
+  normalizedCivilianWord String
+  normalizedImpostorWord String
+  isActive               Boolean    @default(true)
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+  roomWords              RoomWord[]
+
+  @@unique([normalizedCivilianWord, normalizedImpostorWord])
+  @@index([isActive])
+}
+
+model RoomWord {
+  id               String    @id @default(cuid())
+  wordNumber       Int
+  civilianWord     String
+  impostorWord     String
+  roomId           String
+  sourceWordPairId String?
+  room             Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sourceWordPair   WordPair? @relation(fields: [sourceWordPairId], references: [id], onDelete: SetNull)
+
+  @@unique([roomId, wordNumber])
+  @@unique([roomId, sourceWordPairId])
+  @@index([roomId])
 }
 
 model Clue {
-  id          String   @id @default(cuid())
-  content     String
-  wordNumber  Int
-  roundNumber Int
-  createdAt   DateTime @default(now())
-  roomId      String
-  playerId    String
-  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  player      Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  content           String
+  normalizedContent String
+  wordNumber        Int
+  roundNumber       Int
+  createdAt         DateTime @default(now())
+  roomId            String
+  playerId          String
+  room              Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  player            Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([roomId, playerId, wordNumber, roundNumber])
+  @@unique([roomId, wordNumber, normalizedContent])
   @@index([roomId])
 }
 

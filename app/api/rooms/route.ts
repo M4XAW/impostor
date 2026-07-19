@@ -5,7 +5,13 @@ import { getValidRoomCode } from "@/lib/room-code";
 import { setRoomPlayerId } from "@/lib/session";
 import { notifyRoomChanged } from "@/lib/realtime";
 
-const createSchema = z.object({ name: z.string().trim().min(2).max(24) });
+const playerNameSchema = z
+    .string({ error: "Le pseudo doit être du texte." })
+    .trim()
+    .min(2, { error: "Le pseudo doit contenir au moins 2 caractères." })
+    .max(24, { error: "Le pseudo ne doit pas dépasser 24 caractères." });
+
+const createSchema = z.object({ name: playerNameSchema });
 const joinSchema = createSchema.extend({ code: z.string() });
 
 export async function POST(request: NextRequest) {
@@ -34,7 +40,10 @@ export async function POST(request: NextRequest) {
         const createRequest = createSchema.safeParse(body);
         if (!createRequest.success) {
             return Response.json(
-                { error: "Informations de partie invalides." },
+                {
+                    error: createRequest.error.issues[0]?.message
+                        ?? "Informations de partie invalides.",
+                },
                 { status: 400 },
             );
         }

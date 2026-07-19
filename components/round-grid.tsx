@@ -32,16 +32,16 @@ export function RoundGrid({ game }: RoundGridProps) {
                 {game.players.map((player) => (
                     <article
                         key={player.id}
-                        className="overflow-hidden rounded-2xl border border-white/10 bg-white/3 text-center"
+                        className="overflow-hidden border bg-white/3 text-center"
                     >
                         <div
-                            className="grid h-14 place-items-center border-b border-white/10 text-3xl"
+                            className="grid h-14 place-items-center border-b text-3xl"
                             aria-hidden="true"
                         >
                             ◉
                         </div>
 
-                        <div className="border-b border-white/10 px-3 py-2 font-semibold">
+                        <div className="border-b px-3 py-2 font-semibold">
                             {player.name}
                             {player.id === game.currentPlayer.id ? " (toi)" : ""}
                         </div>
@@ -62,7 +62,7 @@ export function RoundGrid({ game }: RoundGridProps) {
                             return (
                                 <div
                                     key={`${round.wordNumber}-${round.roundNumber}`}
-                                    className={`min-h-12 border-b border-white/10 px-3 py-3 last:border-b-0 ${isActive ? "bg-orange-400/10 text-orange-200" : ""}`}
+                                    className={`min-h-12 border-b px-3 py-3 last:border-b-0 ${isActive ? "bg-orange-400/10 text-orange-200" : ""}`}
                                 >
                                     {clue?.content ?? (isActive ? "À jouer" : "—")}
                                 </div>
