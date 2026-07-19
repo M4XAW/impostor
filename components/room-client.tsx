@@ -18,8 +18,10 @@ import {
     NumberFieldInput,
 } from "@/components/number-field"
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ButtonGroup } from "@/components/ui/button-group";
 
-import { RiArrowRightUpLine } from "@remixicon/react";
+import { CornerUpRight } from 'pixelarticons/react'
 
 interface RoomClientProps {
     code: string;
@@ -186,7 +188,7 @@ export function RoomClient({ code }: RoomClientProps) {
                         {game.phase === "DISCUSSION" && game.turn && (
                             <div className="mt-5 flex items-center justify-between border border-orange-400/20 bg-orange-400/10 p-4">
                                 <div>
-                                    <p className="text-sm text-orange-200">À jouer maintenant</p>
+                                    <p className="text-sm text-orange-300">À jouer maintenant</p>
                                     <p>
                                         {currentTurnPlayer?.name}
                                         {canSubmitClue ? " — c’est toi" : ""}
@@ -242,21 +244,20 @@ export function RoomClient({ code }: RoomClientProps) {
                                     }
                                 }}
                             >
-                                <label className="sr-only" htmlFor="clue">
-                                    Votre mot
-                                </label>
-                                <input
-                                    id="clue"
-                                    value={clue}
-                                    onChange={(event) => setClue(event.target.value)}
-                                    maxLength={40}
-                                    required
-                                    className="min-w-0 flex-1 bg-white/10 px-4 py-3 outline-none ring-orange-400 focus:ring-2"
-                                    placeholder="Saisis un mot qui ressemble…"
-                                />
-                                <Button className="bg-orange-500 px-4">
-                                    Valider
-                                </Button>
+                                <Field>
+                                    <ButtonGroup>
+                                        <FieldLabel htmlFor="clue" className="sr-only">Ton indice</FieldLabel>
+                                        <Input
+                                            id="clue"
+                                            value={clue}
+                                            onChange={(event) => setClue(event.target.value)}
+                                            maxLength={40}
+                                            placeholder="Saisis un mot qui ressemble…"
+                                            required
+                                        />
+                                        <Button size="lg">Valider</Button>
+                                    </ButtonGroup>
+                                </Field>
                             </form>
                         )}
 
@@ -329,7 +330,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                     disabled={game.players.length < 3}
                                 >
                                     Lancer la partie
-                                    <RiArrowRightUpLine />
+                                    <CornerUpRight />
                                 </Button>
                             )}
 
@@ -343,11 +344,13 @@ export function RoomClient({ code }: RoomClientProps) {
                         </CardFooter>
                     )}
                 </Card>
-                <Card>
-                    <CardContent>
-                        <Settings game={game} isHost={isHost} onSave={play} />
-                    </CardContent>
-                </Card>
+                {game.phase === "LOBBY" && (
+                    <Card>
+                        <CardContent>
+                            <Settings game={game} isHost={isHost} onSave={play} />
+                        </CardContent>
+                    </Card>
+                )}
             </div>
         </main>
     );

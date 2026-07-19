@@ -62,7 +62,7 @@ export function RoundGrid({ game }: RoundGridProps) {
                             return (
                                 <div
                                     key={`${round.wordNumber}-${round.roundNumber}`}
-                                    className={`min-h-12 border-b px-3 py-3 last:border-b-0 ${isActive ? "bg-orange-400/10 text-orange-200" : ""}`}
+                                    className={`min-h-12 border-b px-3 py-3 last:border-b-0 ${isActive ? "bg-orange-400/10 text-orange-300" : ""}`}
                                 >
                                     {clue?.content ?? (isActive ? "À jouer" : "—")}
                                 </div>

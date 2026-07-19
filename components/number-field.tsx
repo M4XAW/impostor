@@ -5,7 +5,7 @@ import { NumberField as NumberFieldPrimitive } from "@base-ui/react/number-field
 import { cva, VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
-import { RiSubtractLine, RiAddLine } from "@remixicon/react"
+import { Plus, Minus } from 'pixelarticons/react'
 
 const NumberFieldContext = createContext<{
   fieldId: string
@@ -138,7 +138,7 @@ function NumberFieldDecrement({
       {...props}
     >
       {children ?? (
-        <RiSubtractLine />
+        <Minus />
       )}
     </NumberFieldPrimitive.Decrement>
   )
@@ -172,7 +172,7 @@ function NumberFieldIncrement({
       {...props}
     >
       {children ?? (
-        <RiAddLine />
+        <Plus />
       )}
     </NumberFieldPrimitive.Increment>
   )
