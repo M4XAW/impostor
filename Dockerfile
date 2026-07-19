@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS builder
 COPY . .
-RUN DATABASE_URL="postgresql://impostor:impostor@db:5432/impostor?schema=public" pnpm prisma generate && pnpm build
+RUN DATABASE_URL="postgresql://impostor:impostor@db:5432/impostor" pnpm prisma generate && pnpm build
 
 FROM base AS runner
 ENV NODE_ENV=production

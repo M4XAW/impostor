@@ -65,7 +65,7 @@ Sous PowerShell :
 Copy-Item .env.example .env
 ```
 
-La valeur par défaut de `DATABASE_URL` cible la base PostgreSQL exposée sur `localhost:5432`.
+La valeur par défaut de `DATABASE_URL` cible la base PostgreSQL exposée sur `localhost:5433`.
 
 ### 4. Générer Prisma et appliquer les migrations
 
@@ -105,6 +105,17 @@ pnpm prisma generate
 # Créer une nouvelle migration lors d’une évolution du schéma
 pnpm prisma migrate dev --name description_du_changement
 ```
+
+### Prisma Studio
+
+Pour visualiser et modifier les données de jeu, démarrez PostgreSQL puis Prisma Studio :
+
+```bash
+docker compose up -d db
+pnpm db:studio
+```
+
+Ouvrez ensuite [http://localhost:5555](http://localhost:5555).
 
 ## Architecture
 

@@ -74,7 +74,7 @@ export function GameEntry({ joinCode }: GameEntryProps) {
                     </Button>
                 </div>
                 <div>
-                    <h2 id="game-entry-title" className="text-2xl font-extrabold text-white">
+                    <h2 id="game-entry-title" className="text-2xl text-white">
                         {isCreating ? "Créer une partie" : "Rejoindre une partie"}
                     </h2>
                     <p className="mt-2 text-muted-foreground text-sm">

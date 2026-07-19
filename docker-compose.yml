@@ -5,12 +5,14 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://impostor:impostor@db:5432/impostor?schema=public
+      DATABASE_URL: postgresql://impostor:impostor@db:5432/impostor
     depends_on:
       db:
         condition: service_healthy
   db:
     image: postgres:17-alpine
+    ports:
+      - "5433:5432"
     environment:
       POSTGRES_DB: impostor
       POSTGRES_USER: impostor

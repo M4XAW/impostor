@@ -6,9 +6,17 @@ import { io } from "socket.io-client";
 import { RoundGrid } from "@/components/round-grid";
 import type { GameSnapshot } from "@/types/game";
 
-import { RiAddLine } from "@remixicon/react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "./ui/badge";
+import { Badge } from "@/components/ui/badge";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { RiAddLine } from "@remixicon/react";
+import {
+    NumberField,
+    NumberFieldDecrement,
+    NumberFieldGroup,
+    NumberFieldIncrement,
+    NumberFieldInput,
+} from "@/components/number-field"
 
 interface RoomClientProps {
     code: string;
@@ -150,20 +158,18 @@ export function RoomClient({ code }: RoomClientProps) {
     const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerId === game.currentPlayer.id;
 
     return (
-        <main className="min-h-screen px-5 py-8 text-slate-100">
+        <main className="px-5 pb-8 text-slate-100">
             <div className="mx-auto max-w-5xl">
-                <header className="flex items-center justify-between">
-                    <Link href="/" className="font-black tracking-tight">IMPOSTOR</Link>
-                    <span className="rounded-full bg-white/5 px-3 py-1 font-pixel text-sm">{game.code}</span>
-                    <Badge variant="secondary">{game.code}</Badge>
-                </header>
-                <section className="flex justify-space-between gap-6 mt-8 rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8">
+                <section className="flex justify-space-between gap-6 rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8">
                     <div className="flex-1">
-                        <p className="text-sm font-bold uppercase tracking-widest text-orange-300">
-                            {game.phase === "LOBBY" ? "Salon" :
-                                game.phase === "DISCUSSION" ? "Tour en cours"
-                                    : game.phase === "VOTING" ? "Vote" : "Résultats"}
-                        </p>
+                        <div className="flex items-center justify-between gap-4">
+                            <p className="text-sm font-bold uppercase tracking-widest text-orange-300">
+                                {game.phase === "LOBBY" ? "Salon" :
+                                    game.phase === "DISCUSSION" ? "Tour en cours"
+                                        : game.phase === "VOTING" ? "Vote" : "Résultats"}
+                            </p>
+                            <Badge variant="secondary">{game.code}</Badge>
+                        </div>
 
                         <h1 className="mt-2 text-3xl font-black">
                             {game.phase === "LOBBY"
@@ -203,12 +209,11 @@ export function RoomClient({ code }: RoomClientProps) {
                                             <code className="min-w-0 flex-1 truncate text-sm">
                                                 ?join={game.code}
                                             </code>
-                                            <button
-                                                className="rounded-lg bg-violet-500 px-3 py-1.5 text-sm font-bold"
+                                            <Button
                                                 onClick={() => void copyInvite()}
                                             >
                                                 {isCopied ? "Copié" : "Copier"}
-                                            </button>
+                                            </Button>
                                         </div>
                                     </div>
                                 </div>
@@ -249,9 +254,9 @@ export function RoomClient({ code }: RoomClientProps) {
                                     className="min-w-0 flex-1 rounded-xl bg-white/10 px-4 py-3 outline-none ring-orange-400 focus:ring-2"
                                     placeholder="Saisis un mot qui ressemble…"
                                 />
-                                <button className="rounded-xl bg-orange-500 px-4 font-bold">
+                                <Button className="rounded-xl bg-orange-500 px-4 font-bold">
                                     Valider
-                                </button>
+                                </Button>
                             </form>
                         )}
 
@@ -272,7 +277,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                             {player.hasVoted ? "A voté" : ""}
                                         </span>
                                         {player.id !== game.currentPlayer.id && (
-                                            <button
+                                            <Button
                                                 className="rounded-lg bg-white/10 px-3 py-1 text-sm hover:bg-white/20"
                                                 onClick={() =>
                                                     void play({
@@ -282,7 +287,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                                 }
                                             >
                                                 Voter
-                                            </button>
+                                            </Button>
                                         )}
                                     </li>
                                 ))}
@@ -313,31 +318,27 @@ export function RoomClient({ code }: RoomClientProps) {
                         )}
 
                         {error && (
-                            <p className="mt-4 text-sm text-rose-300" role="alert">
-                                {error}
-                            </p>
+                            <p className="mt-4 text-sm text-rose-300" role="alert">{error}</p>
                         )}
 
                         <div className="mt-7">
                             {game.phase === "LOBBY" && isHost && (
-                                <button
-                                    disabled={game.players.length < 3}
-                                    className="rounded-xl bg-orange-500 px-5 py-3 font-bold disabled:opacity-40"
+                                <Button
                                     onClick={() => void play({ action: "start" })}
+                                    disabled={game.players.length < 3}
                                 >
                                     Lancer la partie
-                                </button>
+                                </Button>
                             )}
 
                             {game.phase === "DISCUSSION" &&
                                 isHost &&
                                 game.turn?.canStartVote && (
-                                    <button
-                                        className="rounded-xl bg-violet-500 px-5 py-3 font-bold"
+                                    <Button
                                         onClick={() => void play({ action: "beginVote" })}
                                     >
                                         Passer au vote
-                                    </button>
+                                    </Button>
                                 )}
                         </div>
                     </div>
@@ -349,21 +350,49 @@ export function RoomClient({ code }: RoomClientProps) {
 }
 
 function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolean; onSave: (payload: Record<string, unknown>) => Promise<void> }) {
+    const settingsKey = `${game.settings.wordCount}-${game.settings.roundCount}-${game.settings.turnSeconds}-${game.settings.impostorCount}`;
+    const settingsContent = (
+        <>
+            <h2 className="font-bold">Paramètres de partie</h2>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
+                {settingFields.map((field) => (
+                    <Field key={field.name}>
+                        <FieldLabel htmlFor={field.name}>{field.label}</FieldLabel>
+                        <NumberField
+                            name={field.name}
+                            defaultValue={game.settings[field.name]}
+                            min={field.min}
+                            max={field.max}
+                            disabled={!isHost}
+                        >
+                            <NumberFieldGroup>
+                                <NumberFieldDecrement />
+                                <NumberFieldInput id={field.name} />
+                                <NumberFieldIncrement />
+                            </NumberFieldGroup>
+                        </NumberField>
+                    </Field>
+                ))}
+            </div>
+
+            <Button type={isHost ? "submit" : "button"} className="mt-5 w-full" disabled={!isHost}>
+                Enregistrer
+            </Button>
+        </>
+    );
+
     if (!isHost) {
         return (
-            <div className="rounded-2xl border border-white/10 p-4 text-sm text-slate-300">
-                <p className="font-bold text-white">Paramètres de l’hôte</p>
-                <p className="mt-2">
-                    {game.settings.wordCount} mots · {game.settings.roundCount} tours · {game.settings.turnSeconds}s par tour · {game.settings.impostorCount} imposteur
-                    {game.settings.impostorCount > 1 ? "s" : ""}
-                </p>
+            <div key={settingsKey} className="rounded-2xl border border-white/10 p-4">
+                {settingsContent}
             </div>
         );
     }
 
     return (
         <form
-            key={`${game.settings.wordCount}-${game.settings.roundCount}-${game.settings.turnSeconds}-${game.settings.impostorCount}`}
+            key={settingsKey}
             className="rounded-2xl border border-white/10 p-4"
             onSubmit={(event) => {
                 event.preventDefault();
@@ -378,27 +407,7 @@ function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolea
                 });
             }}
         >
-            <h2 className="font-bold">Paramètres de partie</h2>
-
-            <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
-                {settingFields.map((field) => (
-                    <label key={field.name} className="text-slate-300">
-                        {field.label}
-                        <input
-                            name={field.name}
-                            type="number"
-                            min={field.min}
-                            max={field.max}
-                            defaultValue={game.settings[field.name]}
-                            className="mt-1 w-full rounded-lg bg-white/10 px-3 py-2 text-white"
-                        />
-                    </label>
-                ))}
-            </div>
-
-            <button className="mt-4 rounded-lg bg-white/10 px-3 py-2 text-sm font-bold hover:bg-white/20">
-                Enregistrer
-            </button>
+            {settingsContent}
         </form>
     );
 }
