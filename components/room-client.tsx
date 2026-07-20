@@ -6,6 +6,7 @@ import { io } from "socket.io-client";
 import { FullScreenLoader } from "@/components/full-screen-loader";
 import { RoundGrid } from "@/components/round-grid";
 import { TransferHostContextMenu } from "@/components/transfer-host-context-menu";
+import { VoteConfirmationDialog } from "@/components/vote-confirmation-dialog";
 import type { GameSnapshot } from "@/types/game";
 
 import { Button } from "@/components/ui/button";
@@ -437,17 +438,16 @@ export function RoomClient({ code }: RoomClientProps) {
                                             {player.isSelf ? " (toi)" : ""}
                                         </span>
                                         {!player.isSelf && (
-                                            <Button
+                                            <VoteConfirmationDialog
                                                 disabled={hasCurrentPlayerVoted}
-                                                onClick={() =>
+                                                playerName={player.name}
+                                                onConfirm={() =>
                                                     void play({
                                                         action: "vote",
                                                         targetPublicId: player.publicId,
                                                     })
                                                 }
-                                            >
-                                                Voter
-                                            </Button>
+                                            />
                                         )}
                                     </li>
                                 ))}
@@ -484,22 +484,24 @@ export function RoomClient({ code }: RoomClientProps) {
                     {(canStartGame || canBeginVote) && (
                         <CardFooter>
                             {canStartGame && (
-
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <span className="inline-block w-fit">
-                                            <Button
-                                                onClick={() => void play({ action: "start" })}
-                                                disabled={game.players.length < 3}
-                                            >
-                                                Lancer la partie
-                                            </Button>
-                                        </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="bottom">
-                                        <p>Il manque {3 - game.players.length} joueur{game.players.length === 2 ? "" : "s"} pour commencer</p>
-                                    </TooltipContent>
-                                </Tooltip>
+                                game.players.length >= 3 ? (
+                                    <Button onClick={() => void play({ action: "start" })}>
+                                        Lancer la partie
+                                    </Button>
+                                ) : (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-block w-fit">
+                                                <Button disabled>
+                                                    Lancer la partie
+                                                </Button>
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="bottom">
+                                            <p>Il manque {3 - game.players.length} joueur{game.players.length === 2 ? "" : "s"} pour commencer</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                )
                             )}
 
                             {canBeginVote && (
