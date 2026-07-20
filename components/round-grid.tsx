@@ -2,9 +2,10 @@ import type { GameSnapshot } from "@/types/game";
 
 interface RoundGridProps {
     game: GameSnapshot;
+    connectedPlayerIds: string[] | null;
 }
 
-export function RoundGrid({ game }: RoundGridProps) {
+export function RoundGrid({ game, connectedPlayerIds }: RoundGridProps) {
     const rowMap = new Map<string, { wordNumber: number; roundNumber: number }>();
     game.clues.forEach((clue) => {
         rowMap.set(`${clue.wordNumber}-${clue.roundNumber}`, {
@@ -32,7 +33,7 @@ export function RoundGrid({ game }: RoundGridProps) {
                 {game.players.map((player) => (
                     <article
                         key={player.id}
-                        className="overflow-hidden border bg-white/3 text-center"
+                        className={`overflow-hidden border bg-white/3 text-center transition-opacity ${connectedPlayerIds?.includes(player.id) === false ? "opacity-40" : ""}`}
                     >
                         <div
                             className="grid h-14 place-items-center border-b text-3xl"
@@ -44,6 +45,9 @@ export function RoundGrid({ game }: RoundGridProps) {
                         <div className="border-b px-3 py-2 font-semibold">
                             {player.name}
                             {player.id === game.currentPlayer.id ? " (toi)" : ""}
+                            {connectedPlayerIds?.includes(player.id) === false && (
+                                <span className="sr-only"> — hors ligne</span>
+                            )}
                         </div>
 
                         {rounds.map((round) => {

@@ -9,4 +9,5 @@ export interface GameSnapshot {
   clues: Array<{ id: string; playerId: string; content: string; playerName: string; wordNumber: number; roundNumber: number }>;
   votes: Array<{ voterName: string; targetName: string }>;
   winner?: "CIVILIANS" | "IMPOSTOR";
+  endReason?: "NOT_ENOUGH_PLAYERS";
 }

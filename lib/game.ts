@@ -60,6 +60,69 @@ export async function joinRoom(code: string, name: string) {
   return { room, player: await prisma.player.create({ data: { roomId: room.id, name } }) };
 }
 
+export async function isPlayerInRoom(code: string, playerId: string) {
+  return Boolean(await prisma.player.findFirst({
+    where: { id: playerId, room: { code } },
+    select: { id: true },
+  }));
+}
+
+export async function removePlayer(code: string, playerId: string) {
+  return prisma.$transaction(async (transaction) => {
+    const room = await transaction.room.findUnique({
+      where: { code },
+      include: { players: { orderBy: { createdAt: "asc" } } },
+    });
+    const departingPlayerIndex = room?.players.findIndex((player) => player.id === playerId) ?? -1;
+
+    if (!room || departingPlayerIndex < 0) return false;
+
+    const departingPlayer = room.players[departingPlayerIndex];
+    const remainingPlayers = room.players.filter((player) => player.id !== playerId);
+
+    if (remainingPlayers.length === 0) {
+      await transaction.room.delete({ where: { id: room.id } });
+      return true;
+    }
+
+    await transaction.player.delete({ where: { id: playerId } });
+
+    if (departingPlayer.isHost) {
+      await transaction.player.update({
+        where: { id: remainingPlayers[0].id },
+        data: { isHost: true },
+      });
+    }
+
+    if (room.phase !== RoomPhase.LOBBY && room.phase !== RoomPhase.RESULTS && remainingPlayers.length < 3) {
+      await transaction.room.update({
+        where: { id: room.id },
+        data: { phase: RoomPhase.RESULTS, winner: null, turnEndsAt: null },
+      });
+      return true;
+    }
+
+    if (room.phase === RoomPhase.DISCUSSION) {
+      const departingPlayerHadTurn = departingPlayerIndex === room.currentPlayerIndex;
+      const currentPlayerIndex = departingPlayerIndex < room.currentPlayerIndex
+        ? room.currentPlayerIndex - 1
+        : Math.min(room.currentPlayerIndex, remainingPlayers.length - 1);
+
+      await transaction.room.update({
+        where: { id: room.id },
+        data: {
+          currentPlayerIndex,
+          turnEndsAt: departingPlayerHadTurn
+            ? new Date(Date.now() + room.turnSeconds * 1000)
+            : room.turnEndsAt,
+        },
+      });
+    }
+
+    return true;
+  });
+}
+
 export async function updateSettings(code: string, playerId: string, settings: RoomSettings) {
   const room = await prisma.room.findUnique({ where: { code }, include: { players: true } });
   if (!room || !isHost(room.players, playerId) || room.phase !== RoomPhase.LOBBY) throw new Error("Seul l'hôte peut modifier les paramètres avant le départ.");
@@ -158,5 +221,5 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
   if (!room || !currentPlayer) return null;
   const currentTurnPlayer = room.players[room.currentPlayerIndex];
   const currentWord = room.words.find((word) => word.wordNumber === room.wordNumber);
-  return { code: room.code, phase: room.phase, settings: { wordCount: room.wordCount, roundCount: room.roundCount, turnSeconds: room.turnSeconds, impostorCount: room.impostorCount }, turn: room.phase === RoomPhase.DISCUSSION && room.turnEndsAt && currentTurnPlayer ? { wordNumber: room.wordNumber, roundNumber: room.roundNumber, currentPlayerId: currentTurnPlayer.id, endsAt: room.turnEndsAt.toISOString(), canStartVote: room.roundNumber > 1 || room.wordNumber > 1 } : undefined, players: room.players.map((player) => ({ id: player.id, name: player.name, isHost: player.isHost, hasVoted: room.votes.some((vote) => vote.voterId === player.id) })), currentPlayer: { id: currentPlayer.id, name: currentPlayer.name, isHost: currentPlayer.isHost, word: room.phase === RoomPhase.LOBBY ? undefined : currentPlayer.role === PlayerRole.IMPOSTOR ? currentWord?.impostorWord : currentWord?.civilianWord }, clues: room.clues.map((clue) => ({ id: clue.id, playerId: clue.playerId, content: clue.content, playerName: clue.player.name, wordNumber: clue.wordNumber, roundNumber: clue.roundNumber })), votes: room.votes.map((vote) => ({ voterName: vote.voter.name, targetName: vote.target.name })), winner: room.winner === "CIVILIANS" || room.winner === "IMPOSTOR" ? room.winner : undefined };
+  return { code: room.code, phase: room.phase, settings: { wordCount: room.wordCount, roundCount: room.roundCount, turnSeconds: room.turnSeconds, impostorCount: room.impostorCount }, turn: room.phase === RoomPhase.DISCUSSION && room.turnEndsAt && currentTurnPlayer ? { wordNumber: room.wordNumber, roundNumber: room.roundNumber, currentPlayerId: currentTurnPlayer.id, endsAt: room.turnEndsAt.toISOString(), canStartVote: room.roundNumber > 1 || room.wordNumber > 1 } : undefined, players: room.players.map((player) => ({ id: player.id, name: player.name, isHost: player.isHost, hasVoted: room.votes.some((vote) => vote.voterId === player.id) })), currentPlayer: { id: currentPlayer.id, name: currentPlayer.name, isHost: currentPlayer.isHost, word: room.phase === RoomPhase.LOBBY ? undefined : currentPlayer.role === PlayerRole.IMPOSTOR ? currentWord?.impostorWord : currentWord?.civilianWord }, clues: room.clues.map((clue) => ({ id: clue.id, playerId: clue.playerId, content: clue.content, playerName: clue.player.name, wordNumber: clue.wordNumber, roundNumber: clue.roundNumber })), votes: room.votes.map((vote) => ({ voterName: vote.voter.name, targetName: vote.target.name })), winner: room.winner === "CIVILIANS" || room.winner === "IMPOSTOR" ? room.winner : undefined, endReason: room.phase === RoomPhase.RESULTS && !room.winner ? "NOT_ENOUGH_PLAYERS" : undefined };
 }
