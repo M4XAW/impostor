@@ -3,6 +3,7 @@ import { GeistPixelSquare, } from 'geist/font/pixel';
 import "./globals.css";
 
 import { Header } from "@/components/header";
+import { CornerMarkers } from "@/components/ui/corner-markers";
 import appPackage from "@/package.json"
 
 export const metadata: Metadata = {
@@ -22,10 +23,7 @@ export default function RootLayout({
         >
             <body className="bg-background min-h-svh p-3 md:p-4">
                 <div className="relative isolate flex flex-col border border-dotted md:min-h-[calc(100svh-2rem)]">
-                    <span aria-hidden="true" className="pointer-events-none absolute -left-1.25 -top-1.25 z-20 size-2.25 border border-dotted border-border bg-background" />
-                    <span aria-hidden="true" className="pointer-events-none absolute -right-1.25 -top-1.25 z-20 size-2.25 border border-dotted border-border bg-background" />
-                    <span aria-hidden="true" className="pointer-events-none absolute -left-1.25 -bottom-1.25 z-20 size-2.25 border border-dotted border-border bg-background" />
-                    <span aria-hidden="true" className="pointer-events-none absolute -right-1.25 -bottom-1.25 z-20 size-2.25 border border-dotted border-border bg-background" />
+                    <CornerMarkers />
                     <div
                         aria-hidden="true"
                         className="pointer-events-none absolute inset-0 bg-[radial-gradient(currentColor_1px,transparent_1px)] bg-size-[22px_22px] text-border/60 -z-1"

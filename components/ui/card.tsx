@@ -1,8 +1,10 @@
 import * as React from "react"
 
+import { CornerMarkers } from "@/components/ui/corner-markers"
 import { cn } from "@/lib/utils"
 
 function Card({
+  children,
   className,
   size = "default",
   ...props
@@ -12,11 +14,14 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden bg-card py-(--card-spacing) text-sm text-card-foreground shadow-sm ring-1 ring-foreground/5 [--card-spacing:--spacing(5)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] dark:ring-foreground/10",
+        "group/card relative flex flex-col gap-(--card-spacing) bg-card py-(--card-spacing) text-sm text-card-foreground shadow-sm ring-1 ring-foreground/5 [--card-spacing:--spacing(5)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] dark:ring-foreground/10",
         className
       )}
       {...props}
-    />
+    >
+      <CornerMarkers markerClassName="bg-card" />
+      {children}
+    </div>
   )
 }
 
