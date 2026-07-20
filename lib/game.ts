@@ -18,10 +18,6 @@ export interface RoomSettings {
   impostorCount: number;
 }
 
-type RoomWithPlayers = Prisma.RoomGetPayload<{
-  include: { players: true };
-}>;
-
 function isHost(players: Array<{ id: string; isHost: boolean }>, playerId: string) {
   return players.some((player) => player.id === playerId && player.isHost);
 }
@@ -378,13 +374,13 @@ export async function startGame(code: string, playerId: string) {
 async function advanceTurnWithClient(
   client: Prisma.TransactionClient,
   code: string,
-  options: { force?: boolean; now?: Date; room?: RoomWithPlayers } = {},
+  options: { force?: boolean; now?: Date } = {},
 ) {
   const now = options.now ?? new Date();
-  const room = options.room ?? (await client.room.findUnique({
+  const room = await client.room.findUnique({
     where: { code },
     include: { players: { orderBy: { createdAt: "asc" } } },
-  }));
+  });
 
   if (
     !room ||
@@ -448,23 +444,11 @@ export async function advanceExpiredTurn(code: string, now = new Date()) {
   });
 }
 
-export type SubmitClueResult =
-  | { accepted: true }
-  | { accepted: false; reason: "TURN_EXPIRED" };
-
-export async function submitClue(
-  code: string,
-  playerId: string,
-  content: string,
-): Promise<SubmitClueResult> {
+export async function submitClue(code: string, playerId: string, content: string) {
   try {
-    return await runSerializable(async (transaction) => {
-      const { room, changed } = await advanceTurnWithClient(transaction, code);
+    await runSerializable(async (transaction) => {
+      const { room } = await advanceTurnWithClient(transaction, code);
       if (!room || room.phase !== RoomPhase.DISCUSSION || room.players[room.currentPlayerIndex]?.id !== playerId) {
-        if (changed) {
-          return { accepted: false, reason: "TURN_EXPIRED" };
-        }
-
         throw new PublicError("Ce n'est pas votre tour.", 409);
       }
 
@@ -483,8 +467,7 @@ export async function submitClue(
           roundNumber: room.roundNumber,
         },
       });
-      await advanceTurnWithClient(transaction, code, { force: true, room });
-      return { accepted: true };
+      await advanceTurnWithClient(transaction, code, { force: true });
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

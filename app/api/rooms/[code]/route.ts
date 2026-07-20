@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { publicErrorResponse, PublicError } from "@/lib/errors";
 import {
-  advanceExpiredTurn,
   beginVote,
   castVote,
   getSnapshot,
@@ -26,7 +25,6 @@ import type { GameSnapshot } from "@/types/game";
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("start") }),
-  z.object({ action: z.literal("syncTimer") }),
   z.object({ action: z.literal("beginVote") }),
   z.object({ action: z.literal("vote"), targetPublicId: z.string().uuid() }),
   z.object({ action: z.literal("transferHost"), targetPlayerPublicId: z.string().uuid() }),
@@ -57,23 +55,6 @@ function privateJson(body: unknown, init?: ResponseInit) {
   return response;
 }
 
-async function getSynchronizedSnapshot(
-  code: string,
-  playerId: string,
-  serverReceivedAt: number,
-): Promise<GameSnapshot> {
-  const snapshot = await getSnapshot(code, playerId);
-  if (!snapshot) throw new PublicError("Partie introuvable.", 404);
-
-  return {
-    ...snapshot,
-    serverTiming: {
-      receivedAt: serverReceivedAt,
-      sentAt: Date.now(),
-    },
-  };
-}
-
 export async function GET(request: NextRequest, context: RouteContext<"/api/rooms/[code]">) {
   const serverReceivedAt = Date.now();
 
@@ -85,11 +66,16 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/room
     const player = await getAuthorizedPlayer(code);
     enforceRateLimit(`room:get:${getClientAddress(request)}:${player.id}`, 120, 60_000);
 
-    const synchronizedSnapshot = await getSynchronizedSnapshot(
-      code,
-      player.id,
-      serverReceivedAt,
-    );
+    const snapshot = await getSnapshot(code, player.id);
+    if (!snapshot) throw new PublicError("Partie introuvable.", 404);
+
+    const synchronizedSnapshot: GameSnapshot = {
+      ...snapshot,
+      serverTiming: {
+        receivedAt: serverReceivedAt,
+        sentAt: Date.now(),
+      },
+    };
 
     return privateJson(synchronizedSnapshot);
   } catch (error) {
@@ -100,8 +86,6 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/room
 }
 
 export async function POST(request: NextRequest, context: RouteContext<"/api/rooms/[code]">) {
-  const serverReceivedAt = Date.now();
-
   try {
     validateMutationOrigin(request);
 
@@ -118,12 +102,8 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
     const parsed = actionSchema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new PublicError("Action invalide.");
     let removedPlayerPublicId: string | undefined;
-    let roomChanged = parsed.data.action !== "syncTimer";
 
     if (parsed.data.action === "start") await startGame(code, player.id);
-    if (parsed.data.action === "syncTimer") {
-      roomChanged = await advanceExpiredTurn(code);
-    }
     if (parsed.data.action === "beginVote") await beginVote(code, player.id);
     if (parsed.data.action === "vote") {
       await castVote(code, player.id, parsed.data.targetPublicId);
@@ -135,14 +115,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
       await kickPlayer(code, player.id, parsed.data.targetPlayerPublicId);
       removedPlayerPublicId = parsed.data.targetPlayerPublicId;
     }
-    if (parsed.data.action === "clue") {
-      const result = await submitClue(code, player.id, parsed.data.content);
-
-      if (!result.accepted) {
-        notifyRoomChanged(code);
-        throw new PublicError("Le temps est écoulé. Le tour est passé au joueur suivant.", 409);
-      }
-    }
+    if (parsed.data.action === "clue") await submitClue(code, player.id, parsed.data.content);
     if (parsed.data.action === "leave") {
       await removePlayer(code, player.id);
       await clearRoomSessionToken(code);
@@ -158,21 +131,8 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
       });
     }
 
-    if (roomChanged) {
-      notifyRoomChanged(code, { removedPlayerPublicId });
-    }
-
-    if (parsed.data.action === "leave") {
-      return privateJson({ ok: true });
-    }
-
-    const synchronizedSnapshot = await getSynchronizedSnapshot(
-      code,
-      player.id,
-      serverReceivedAt,
-    );
-
-    return privateJson(synchronizedSnapshot);
+    notifyRoomChanged(code, { removedPlayerPublicId });
+    return privateJson({ ok: true });
   } catch (error) {
     const response = publicErrorResponse(error, "Action impossible.");
     response.headers.set("Cache-Control", "private, no-store, max-age=0");
