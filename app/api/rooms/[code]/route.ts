@@ -55,6 +55,23 @@ function privateJson(body: unknown, init?: ResponseInit) {
   return response;
 }
 
+async function getSynchronizedSnapshot(
+  code: string,
+  playerId: string,
+  serverReceivedAt: number,
+): Promise<GameSnapshot> {
+  const snapshot = await getSnapshot(code, playerId);
+  if (!snapshot) throw new PublicError("Partie introuvable.", 404);
+
+  return {
+    ...snapshot,
+    serverTiming: {
+      receivedAt: serverReceivedAt,
+      sentAt: Date.now(),
+    },
+  };
+}
+
 export async function GET(request: NextRequest, context: RouteContext<"/api/rooms/[code]">) {
   const serverReceivedAt = Date.now();
 
@@ -66,16 +83,11 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/room
     const player = await getAuthorizedPlayer(code);
     enforceRateLimit(`room:get:${getClientAddress(request)}:${player.id}`, 120, 60_000);
 
-    const snapshot = await getSnapshot(code, player.id);
-    if (!snapshot) throw new PublicError("Partie introuvable.", 404);
-
-    const synchronizedSnapshot: GameSnapshot = {
-      ...snapshot,
-      serverTiming: {
-        receivedAt: serverReceivedAt,
-        sentAt: Date.now(),
-      },
-    };
+    const synchronizedSnapshot = await getSynchronizedSnapshot(
+      code,
+      player.id,
+      serverReceivedAt,
+    );
 
     return privateJson(synchronizedSnapshot);
   } catch (error) {
@@ -86,6 +98,8 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/room
 }
 
 export async function POST(request: NextRequest, context: RouteContext<"/api/rooms/[code]">) {
+  const serverReceivedAt = Date.now();
+
   try {
     validateMutationOrigin(request);
 
@@ -132,7 +146,18 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
     }
 
     notifyRoomChanged(code, { removedPlayerPublicId });
-    return privateJson({ ok: true });
+
+    if (parsed.data.action === "leave") {
+      return privateJson({ ok: true });
+    }
+
+    const synchronizedSnapshot = await getSynchronizedSnapshot(
+      code,
+      player.id,
+      serverReceivedAt,
+    );
+
+    return privateJson(synchronizedSnapshot);
   } catch (error) {
     const response = publicErrorResponse(error, "Action impossible.");
     response.headers.set("Cache-Control", "private, no-store, max-age=0");

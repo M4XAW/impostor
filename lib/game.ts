@@ -18,6 +18,10 @@ export interface RoomSettings {
   impostorCount: number;
 }
 
+type RoomWithPlayers = Prisma.RoomGetPayload<{
+  include: { players: true };
+}>;
+
 function isHost(players: Array<{ id: string; isHost: boolean }>, playerId: string) {
   return players.some((player) => player.id === playerId && player.isHost);
 }
@@ -374,13 +378,13 @@ export async function startGame(code: string, playerId: string) {
 async function advanceTurnWithClient(
   client: Prisma.TransactionClient,
   code: string,
-  options: { force?: boolean; now?: Date } = {},
+  options: { force?: boolean; now?: Date; room?: RoomWithPlayers } = {},
 ) {
   const now = options.now ?? new Date();
-  const room = await client.room.findUnique({
+  const room = options.room ?? (await client.room.findUnique({
     where: { code },
     include: { players: { orderBy: { createdAt: "asc" } } },
-  });
+  }));
 
   if (
     !room ||
@@ -467,7 +471,7 @@ export async function submitClue(code: string, playerId: string, content: string
           roundNumber: room.roundNumber,
         },
       });
-      await advanceTurnWithClient(transaction, code, { force: true });
+      await advanceTurnWithClient(transaction, code, { force: true, room });
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

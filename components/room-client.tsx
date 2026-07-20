@@ -86,51 +86,89 @@ export function RoomClient({ code }: RoomClientProps) {
     const [clue, setClue] = useState("");
     const [copiedSlotIndex, setCopiedSlotIndex] = useState<number | null>(null);
     const [isLeaving, setIsLeaving] = useState(false);
+    const [isClueSubmitting, setIsClueSubmitting] = useState(false);
+    const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
     const [connectedPlayerPublicIds, setConnectedPlayerPublicIds] = useState<string[] | null>(null);
     const [now, setNow] = useState(0);
     const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
     const refreshVersion = useRef(0);
+    const pendingActionCount = useRef(0);
+    const refreshQueued = useRef(false);
     const turnEndsAt = game?.turn?.endsAt;
 
-    const refresh = useCallback(async () => {
-        const version = ++refreshVersion.current;
-        const clientSentAt = Date.now();
-        const response = await fetch(`/api/rooms/${code}`, { cache: "no-store" });
-        const clientReceivedAt = Date.now();
-        const payload: unknown = await response.json().catch(() => null);
-
-        if (version !== refreshVersion.current) return;
-
-        if (!response.ok || !isGameSnapshot(payload)) {
-            setError(
-                typeof payload === "object" &&
-                    payload !== null &&
-                    "error" in payload &&
-                    typeof payload.error === "string"
-                    ? payload.error
-                    : "Impossible de charger la partie.",
-            );
-            return;
-        }
-
+    const applySnapshot = useCallback((
+        snapshot: GameSnapshot,
+        clientSentAt: number,
+        clientReceivedAt: number,
+    ) => {
         setServerClockOffsetMs(estimateServerClockOffsetMs(
             clientSentAt,
             clientReceivedAt,
-            payload.serverTiming,
+            snapshot.serverTiming,
         ));
         setNow(clientReceivedAt);
-        setGame(payload);
+        setGame(snapshot);
         setError("");
-    }, [code]);
+    }, []);
+
+    const refresh = useCallback(async () => {
+        if (pendingActionCount.current > 0) {
+            refreshQueued.current = true;
+            return;
+        }
+
+        const version = ++refreshVersion.current;
+        const clientSentAt = Date.now();
+
+        try {
+            const response = await fetch(`/api/rooms/${code}`, { cache: "no-store" });
+            const clientReceivedAt = Date.now();
+            const payload: unknown = await response.json().catch(() => null);
+
+            if (version !== refreshVersion.current) return;
+
+            if (!response.ok || !isGameSnapshot(payload)) {
+                setError(
+                    typeof payload === "object" &&
+                        payload !== null &&
+                        "error" in payload &&
+                        typeof payload.error === "string"
+                        ? payload.error
+                        : "Impossible de charger la partie.",
+                );
+                return;
+            }
+
+            applySnapshot(payload, clientSentAt, clientReceivedAt);
+        } catch {
+            if (version === refreshVersion.current) {
+                setError("Connexion au serveur impossible.");
+            }
+        }
+    }, [applySnapshot, code]);
 
     useEffect(() => {
         const initial = window.setTimeout(() => void refresh(), 0);
-        const interval = window.setInterval(() => void refresh(), 2000);
 
         return () => {
             window.clearTimeout(initial);
-            window.clearInterval(interval);
         };
+    }, [refresh]);
+
+    useEffect(() => {
+        const refreshIntervalMs = isRealtimeConnected ? 30_000 : 2_000;
+        const interval = window.setInterval(() => void refresh(), refreshIntervalMs);
+
+        return () => window.clearInterval(interval);
+    }, [isRealtimeConnected, refresh]);
+
+    useEffect(() => {
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === "visible") void refresh();
+        };
+
+        document.addEventListener("visibilitychange", refreshWhenVisible);
+        return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
     }, [refresh]);
 
     useEffect(() => {
@@ -170,16 +208,23 @@ export function RoomClient({ code }: RoomClientProps) {
     useEffect(() => {
         const socket = io({ path: "/socket.io" });
         const watchRoom = () => socket.emit("room:watch", code);
+        const markRealtimeDisconnected = () => setIsRealtimeConnected(false);
 
         socket.on("connect", watchRoom);
         socket.on("room:changed", () => void refresh());
+        socket.on("disconnect", markRealtimeDisconnected);
+        socket.on("connect_error", markRealtimeDisconnected);
         socket.on("room:presence", (presence: unknown) => {
             if (isRoomPresence(presence)) {
+                setIsRealtimeConnected(true);
                 setConnectedPlayerPublicIds(presence.connectedPlayerPublicIds);
             }
         });
 
         return () => {
+            socket.off("connect", watchRoom);
+            socket.off("disconnect", markRealtimeDisconnected);
+            socket.off("connect_error", markRealtimeDisconnected);
             socket.disconnect();
         };
     }, [code, refresh]);
@@ -192,28 +237,48 @@ export function RoomClient({ code }: RoomClientProps) {
         return () => window.clearTimeout(timeout);
     }, [copiedSlotIndex]);
 
-    async function play(payload: Record<string, unknown>) {
-        const response = await fetch(`/api/rooms/${code}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
+    const play = useCallback(async (payload: Record<string, unknown>): Promise<boolean> => {
+        pendingActionCount.current += 1;
+        refreshVersion.current += 1;
+        const clientSentAt = Date.now();
 
-        const result: unknown = await response.json().catch(() => null);
+        try {
+            const response = await fetch(`/api/rooms/${code}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const clientReceivedAt = Date.now();
+            const result: unknown = await response.json().catch(() => null);
 
-        if (!response.ok) {
-            setError(
-                typeof result === "object" &&
-                    result !== null &&
-                    "error" in result &&
-                    typeof result.error === "string"
-                    ? result.error
-                    : "Action impossible.",
-            );
+            if (!response.ok || !isGameSnapshot(result)) {
+                setError(
+                    typeof result === "object" &&
+                        result !== null &&
+                        "error" in result &&
+                        typeof result.error === "string"
+                        ? result.error
+                        : "Action impossible.",
+                );
+                refreshQueued.current = true;
+                return false;
+            }
+
+            applySnapshot(result, clientSentAt, clientReceivedAt);
+            return true;
+        } catch {
+            setError("Connexion au serveur impossible.");
+            refreshQueued.current = true;
+            return false;
+        } finally {
+            pendingActionCount.current -= 1;
+
+            if (pendingActionCount.current === 0 && refreshQueued.current) {
+                refreshQueued.current = false;
+                void refresh();
+            }
         }
-
-        await refresh();
-    }
+    }, [applySnapshot, code, refresh]);
 
     async function copyInvite(slotIndex: number) {
         await navigator.clipboard.writeText(`${window.location.origin}/join/${code}`);
@@ -448,13 +513,19 @@ export function RoomClient({ code }: RoomClientProps) {
                         {canSubmitClue && (
                             <form
                                 className="mt-6 flex gap-2"
+                                aria-busy={isClueSubmitting}
                                 onSubmit={(event) => {
                                     event.preventDefault();
+                                    const submittedClue = clue.trim();
 
-                                    if (clue.trim()) {
-                                        void play({ action: "clue", content: clue.trim() });
-                                        setClue("");
-                                    }
+                                    if (!submittedClue || isClueSubmitting) return;
+
+                                    setIsClueSubmitting(true);
+                                    void play({ action: "clue", content: submittedClue })
+                                        .then((accepted) => {
+                                            if (accepted) setClue("");
+                                        })
+                                        .finally(() => setIsClueSubmitting(false));
                                 }}
                             >
                                 <Field>
@@ -465,10 +536,18 @@ export function RoomClient({ code }: RoomClientProps) {
                                             value={clue}
                                             onChange={(event) => setClue(event.target.value)}
                                             maxLength={40}
+                                            disabled={isClueSubmitting}
                                             placeholder="Saisis un mot qui ressemble…"
                                             required
                                         />
-                                        <Button size="lg">Valider</Button>
+                                        <Button size="lg" disabled={isClueSubmitting}>
+                                            {isClueSubmitting ? (
+                                                <>
+                                                    <Loader className="animate-spin" aria-hidden="true" />
+                                                    Validation…
+                                                </>
+                                            ) : "Valider"}
+                                        </Button>
                                     </ButtonGroup>
                                 </Field>
                             </form>
@@ -578,10 +657,10 @@ export function RoomClient({ code }: RoomClientProps) {
     );
 }
 
-function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolean; onSave: (payload: Record<string, unknown>) => Promise<void> }) {
+function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolean; onSave: (payload: Record<string, unknown>) => Promise<boolean> }) {
     const settingsKey = `${game.settings.wordCount}-${game.settings.roundCount}-${game.settings.turnSeconds}-${game.settings.impostorCount}`;
     const latestSettings = useRef(game.settings);
-    const saveQueue = useRef(Promise.resolve());
+    const saveQueue = useRef<Promise<void>>(Promise.resolve());
 
     useEffect(() => {
         if (!isHost) {
@@ -607,7 +686,9 @@ function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolea
 
         latestSettings.current = nextSettings;
         saveQueue.current = saveQueue.current
-            .then(() => onSave({ action: "settings", ...nextSettings }))
+            .then(async () => {
+                await onSave({ action: "settings", ...nextSettings });
+            })
             .catch(() => undefined);
     }
 
