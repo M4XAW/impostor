@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { FullScreenLoader } from "@/components/full-screen-loader";
 import { RoundGrid } from "@/components/round-grid";
@@ -482,6 +482,37 @@ export function RoomClient({ code }: RoomClientProps) {
 
 function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolean; onSave: (payload: Record<string, unknown>) => Promise<void> }) {
     const settingsKey = `${game.settings.wordCount}-${game.settings.roundCount}-${game.settings.turnSeconds}-${game.settings.impostorCount}`;
+    const latestSettings = useRef(game.settings);
+    const saveQueue = useRef(Promise.resolve());
+
+    useEffect(() => {
+        if (!isHost) {
+            latestSettings.current = game.settings;
+        }
+    }, [game.settings, isHost]);
+
+    function updateSetting(field: (typeof settingFields)[number], value: number | null) {
+        if (
+            value === null ||
+            !Number.isInteger(value) ||
+            value < field.min ||
+            value > field.max ||
+            latestSettings.current[field.name] === value
+        ) {
+            return;
+        }
+
+        const nextSettings = {
+            ...latestSettings.current,
+            [field.name]: value,
+        };
+
+        latestSettings.current = nextSettings;
+        saveQueue.current = saveQueue.current
+            .then(() => onSave({ action: "settings", ...nextSettings }))
+            .catch(() => undefined);
+    }
+
     const settingsContent = (
         <>
             <h2 className="text-lg">Paramètres de partie</h2>
@@ -495,6 +526,7 @@ function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolea
                             min={field.min}
                             max={field.max}
                             disabled={!isHost}
+                            onValueChange={(value) => updateSetting(field, value)}
                         >
                             <NumberFieldGroup>
                                 <NumberFieldDecrement />
@@ -510,25 +542,5 @@ function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolea
 
     if (!isHost) return <div key={settingsKey} className="w-full lg:w-72 lg:shrink-0">{settingsContent}</div>
 
-    return (
-        <form
-            key={settingsKey}
-            className="w-full lg:w-72 lg:shrink-0"
-            onSubmit={(event) => {
-                event.preventDefault();
-                const data = new FormData(event.currentTarget);
-
-                void onSave({
-                    action: "settings",
-                    wordCount: Number(data.get("wordCount")),
-                    roundCount: Number(data.get("roundCount")),
-                    turnSeconds: Number(data.get("turnSeconds")),
-                    impostorCount: Number(data.get("impostorCount")),
-                });
-            }}
-        >
-            {settingsContent}
-            <Button type="submit" className="mt-5 w-full" disabled={!isHost}>Enregistrer</Button>
-        </form>
-    );
+    return <div className="w-full lg:w-72 lg:shrink-0">{settingsContent}</div>;
 }
