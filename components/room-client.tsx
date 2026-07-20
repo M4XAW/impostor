@@ -21,8 +21,9 @@ import {
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ButtonGroup } from "@/components/ui/button-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-import { CornerUpRight, AvatarCircle, Loader, Plus } from 'pixelarticons/react'
+import { AvatarCircle, Loader, Plus } from 'pixelarticons/react'
 
 interface RoomClientProps {
     code: string;
@@ -476,13 +477,22 @@ export function RoomClient({ code }: RoomClientProps) {
                     {(canStartGame || canBeginVote) && (
                         <CardFooter>
                             {canStartGame && (
-                                <Button
-                                    onClick={() => void play({ action: "start" })}
-                                    disabled={game.players.length < 3}
-                                >
-                                    Lancer la partie
-                                    <CornerUpRight />
-                                </Button>
+
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <span className="inline-block w-fit">
+                                            <Button
+                                                onClick={() => void play({ action: "start" })}
+                                                disabled={game.players.length < 3}
+                                            >
+                                                Lancer la partie
+                                            </Button>
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom">
+                                        <p>Il manque {3 - game.players.length} joueur{game.players.length === 2 ? "" : "s"} pour commencer</p>
+                                    </TooltipContent>
+                                </Tooltip>
                             )}
 
                             {canBeginVote && (

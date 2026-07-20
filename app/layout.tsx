@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { GeistPixelSquare, } from 'geist/font/pixel';
 import "./globals.css";
 
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { Header } from "@/components/header";
 import { CornerMarkers } from "@/components/ui/corner-markers";
 import appPackage from "@/package.json"
@@ -37,7 +38,7 @@ export default function RootLayout({
                             {`//v${appPackage.version}`}
                         </small>
                         <Header />
-                        {children}
+                        <TooltipProvider>{children}</TooltipProvider>
                     </div>
                 </div>
             </body>

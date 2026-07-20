@@ -91,7 +91,7 @@ export function GameEntry({ joinCode }: GameEntryProps) {
                                 id="player-name"
                                 name="playerName"
                                 type="text"
-                                placeholder="Ex. Camille"
+                                placeholder="Pseudo"
                                 maxLength={24}
                                 autoComplete="nickname"
                                 required
