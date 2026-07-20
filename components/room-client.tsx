@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import { FullScreenLoader } from "@/components/full-screen-loader";
 import { RoundGrid } from "@/components/round-grid";
+import { TransferHostContextMenu } from "@/components/transfer-host-context-menu";
 import type { GameSnapshot } from "@/types/game";
 
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ButtonGroup } from "@/components/ui/button-group";
 
-import { CornerUpRight, AvatarCircle, Copy, Loader } from 'pixelarticons/react'
+import { CornerUpRight, AvatarCircle, Loader, Plus } from 'pixelarticons/react'
 
 interface RoomClientProps {
     code: string;
@@ -69,7 +70,7 @@ export function RoomClient({ code }: RoomClientProps) {
     const [game, setGame] = useState<GameSnapshot | null>(null);
     const [error, setError] = useState("");
     const [clue, setClue] = useState("");
-    const [isCopied, setIsCopied] = useState(false);
+    const [copiedSlotIndex, setCopiedSlotIndex] = useState<number | null>(null);
     const [isLeaving, setIsLeaving] = useState(false);
     const [connectedPlayerIds, setConnectedPlayerIds] = useState<string[] | null>(null);
     const [now, setNow] = useState(0);
@@ -132,12 +133,12 @@ export function RoomClient({ code }: RoomClientProps) {
     }, [code, refresh]);
 
     useEffect(() => {
-        if (!isCopied) return;
+        if (copiedSlotIndex === null) return;
 
-        const timeout = window.setTimeout(() => setIsCopied(false), 500);
+        const timeout = window.setTimeout(() => setCopiedSlotIndex(null), 500);
 
         return () => window.clearTimeout(timeout);
-    }, [isCopied]);
+    }, [copiedSlotIndex]);
 
     async function play(payload: Record<string, unknown>) {
         const response = await fetch(`/api/rooms/${code}`, {
@@ -162,9 +163,9 @@ export function RoomClient({ code }: RoomClientProps) {
         await refresh();
     }
 
-    async function copyInvite() {
-        await navigator.clipboard.writeText(`${window.location.origin}/?join=${code}`);
-        setIsCopied(true);
+    async function copyInvite(slotIndex: number) {
+        await navigator.clipboard.writeText(`${window.location.origin}/join/${code}`);
+        setCopiedSlotIndex(slotIndex);
     }
 
     async function leaveRoom() {
@@ -286,42 +287,70 @@ export function RoomClient({ code }: RoomClientProps) {
 
                         {game.phase === "LOBBY" && (
                             <>
-                                <div className="mt-6 space-y-4">
-                                    <div className="flex gap-2 p-4 border bg-muted">
-                                        <code className="min-w-0 flex-1 truncate text-sm">
-                                            <p className="text-sm text-muted-foreground">Lien d’invitation</p>
-                                            {game.code}
-                                        </code>
-                                        <Button
-                                            variant="secondary"
-                                            disabled={isCopied}
-                                            onClick={() => void copyInvite()}
-                                        >
-                                            {isCopied ? "Copié" : "Copier"}
-                                            <Copy />
-                                        </Button>
-                                    </div>
-                                </div>
                                 <ul
                                     className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"
                                     aria-label="Joueurs du salon"
                                 >
-                                    {game.players.map((player) => (
+                                    {game.players.map((player) => {
+                                        const canTransferHost = isHost && player.id !== game.currentPlayer.id;
+                                        const playerCard = (
+                                            <li
+                                                key={player.id}
+                                                className={`grid aspect-square min-w-0 place-items-center border border-dotted ${player.isHost ? "border-white bg-white text-black" : ""} ${canTransferHost ? "cursor-context-menu focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" : ""}`}
+                                                tabIndex={canTransferHost ? 0 : undefined}
+                                                aria-label={canTransferHost ? `${player.name}, menu de gestion du joueur` : undefined}
+                                            >
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <AvatarCircle />
+                                                    <div
+                                                        className={`flex max-w-full flex-col items-center gap-1 transition-opacity ${isPlayerConnected(player.id) ? "" : "opacity-40"}`}
+                                                    >
+                                                        <span className="max-w-full wrap-anywhere text-center">
+                                                            {player.name}
+                                                        </span>
+                                                        {!isPlayerConnected(player.id) && (
+                                                            <span className="sr-only"> — hors ligne</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        );
+
+                                        if (!canTransferHost) {
+                                            return playerCard;
+                                        }
+
+                                        return (
+                                            <TransferHostContextMenu
+                                                key={player.id}
+                                                playerName={player.name}
+                                                disabled={!isPlayerConnected(player.id)}
+                                                onConfirm={() => void play({
+                                                    action: "transferHost",
+                                                    targetPlayerId: player.id,
+                                                })}
+                                            >
+                                                {playerCard}
+                                            </TransferHostContextMenu>
+                                        );
+                                    })}
+                                    {Array.from({ length: Math.max(0, 6 - game.players.length) }).map((_, index) => (
                                         <li
-                                            key={player.id}
-                                            className="grid aspect-square min-w-0 place-items-center border bg-muted p-3"
+                                            key={`empty-player-slot-${index}`}
+                                            className="aspect-square min-w-0 border border-dotted text-muted-foreground"
                                         >
-                                            <div className="flex flex-col items-center gap-2">
-                                                <AvatarCircle />
-                                                <span
-                                                    className={`max-w-full wrap-anywhere transition-opacity ${isPlayerConnected(player.id) ? "" : "opacity-40"}`}
-                                                >
-                                                    {player.name}
-                                                    {!isPlayerConnected(player.id) && (
-                                                        <span className="sr-only"> — hors ligne</span>
-                                                    )}
-                                                </span>
-                                            </div>
+                                            <button
+                                                type="button"
+                                                className="grid size-full cursor-pointer place-items-center p-3 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                aria-label={copiedSlotIndex === index ? "Lien d’invitation copié" : "Copier le lien d’invitation"}
+                                                onClick={() => void copyInvite(index)}
+                                            >
+                                                {copiedSlotIndex === index ? (
+                                                    <span className="text-xs">Copié</span>
+                                                ) : (
+                                                    <Plus aria-hidden="true" />
+                                                )}
+                                            </button>
                                         </li>
                                     ))}
                                 </ul>

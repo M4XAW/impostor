@@ -116,7 +116,7 @@ export function GameEntry({ joinCode }: GameEntryProps) {
                         )}
 
                         <Button type="submit" className="w-full" disabled={isSubmitting}>
-                            {!isSubmitting ? <Loader className="animate-spin" /> : isCreating ? "Créer la partie" : "Rejoindre la partie"}
+                            {isSubmitting ? <Loader className="animate-spin" /> : isCreating ? "Créer la partie" : "Rejoindre la partie"}
                         </Button>
                     </FieldGroup>
                 </form>

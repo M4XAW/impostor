@@ -129,6 +129,43 @@ export async function updateSettings(code: string, playerId: string, settings: R
   await prisma.room.update({ where: { id: room.id }, data: settings });
 }
 
+export async function transferHost(code: string, currentHostId: string, targetPlayerId: string) {
+  if (currentHostId === targetPlayerId) throw new Error("Tu es déjà l’hôte de ce salon.");
+
+  await prisma.$transaction(async (transaction) => {
+    const room = await transaction.room.findUnique({
+      where: { code },
+      include: { players: true },
+    });
+
+    if (!room || room.phase !== RoomPhase.LOBBY) {
+      throw new Error("L’hôte peut être transféré uniquement avant le début de la partie.");
+    }
+
+    if (!isHost(room.players, currentHostId)) {
+      throw new Error("Seul l’hôte actuel peut transférer ce rôle.");
+    }
+
+    if (!room.players.some((player) => player.id === targetPlayerId)) {
+      throw new Error("Le nouvel hôte doit être un joueur de ce salon.");
+    }
+
+    const updatedHost = await transaction.player.updateMany({
+      where: { id: currentHostId, roomId: room.id, isHost: true },
+      data: { isHost: false },
+    });
+
+    if (updatedHost.count !== 1) {
+      throw new Error("Le rôle d’hôte a déjà été transféré.");
+    }
+
+    await transaction.player.update({
+      where: { id: targetPlayerId },
+      data: { isHost: true },
+    });
+  });
+}
+
 export async function startGame(code: string, playerId: string) {
   const room = await prisma.room.findUnique({ where: { code }, include: { players: { orderBy: { createdAt: "asc" } } } });
   if (!room || !isHost(room.players, playerId)) throw new Error("Action non autorisée.");
