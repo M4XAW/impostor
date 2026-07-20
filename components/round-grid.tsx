@@ -1,4 +1,5 @@
 import type { GameSnapshot } from "@/types/game";
+import { AvatarCircle } from "pixelarticons/react/AvatarCircle";
 
 interface RoundGridProps {
     game: GameSnapshot;
@@ -33,16 +34,10 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                 {game.players.map((player) => (
                     <article
                         key={player.publicId}
-                        className={`overflow-hidden border bg-white/3 text-center transition-opacity ${connectedPlayerPublicIds?.includes(player.publicId) === false ? "opacity-40" : ""}`}
+                        className={`overflow-hidden border bg-white/3 transition-opacity ${connectedPlayerPublicIds?.includes(player.publicId) === false ? "opacity-40" : ""}`}
                     >
-                        <div
-                            className="grid h-14 place-items-center border-b text-3xl"
-                            aria-hidden="true"
-                        >
-                            ◉
-                        </div>
-
-                        <div className="border-b px-3 py-2 font-semibold">
+                        <div className="flex items-center gap-1 border-b px-3 py-3">
+                            <AvatarCircle />
                             {player.name}
                             {player.isSelf ? " (toi)" : ""}
                             {connectedPlayerPublicIds?.includes(player.publicId) === false && (

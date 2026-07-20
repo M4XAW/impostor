@@ -21,6 +21,7 @@ import {
   clearRoomSessionToken,
   getRoomSessionToken,
 } from "@/lib/session";
+import type { GameSnapshot } from "@/types/game";
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("start") }),
@@ -55,6 +56,8 @@ function privateJson(body: unknown, init?: ResponseInit) {
 }
 
 export async function GET(request: NextRequest, context: RouteContext<"/api/rooms/[code]">) {
+  const serverReceivedAt = Date.now();
+
   try {
     const { code: rawCode } = await context.params;
     const code = getValidRoomCode(rawCode);
@@ -66,7 +69,15 @@ export async function GET(request: NextRequest, context: RouteContext<"/api/room
     const snapshot = await getSnapshot(code, player.id);
     if (!snapshot) throw new PublicError("Partie introuvable.", 404);
 
-    return privateJson(snapshot);
+    const synchronizedSnapshot: GameSnapshot = {
+      ...snapshot,
+      serverTiming: {
+        receivedAt: serverReceivedAt,
+        sentAt: Date.now(),
+      },
+    };
+
+    return privateJson(synchronizedSnapshot);
   } catch (error) {
     const response = publicErrorResponse(error, "Impossible de charger la partie.");
     response.headers.set("Cache-Control", "private, no-store, max-age=0");

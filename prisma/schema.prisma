@@ -39,6 +39,8 @@ model Room {
   votes              Vote[]
   clues              Clue[]
   words              RoomWord[]
+
+  @@index([phase, turnEndsAt])
 }
 
 model WordPair {

@@ -7,6 +7,11 @@ import { FullScreenLoader } from "@/components/full-screen-loader";
 import { RoundGrid } from "@/components/round-grid";
 import { TransferHostContextMenu } from "@/components/transfer-host-context-menu";
 import { VoteConfirmationDialog } from "@/components/vote-confirmation-dialog";
+import {
+    estimateServerClockOffsetMs,
+    getCountdownSeconds,
+    getNextCountdownUpdateDelay,
+} from "@/lib/server-clock";
 import type { GameSnapshot } from "@/types/game";
 
 import { Button } from "@/components/ui/button";
@@ -54,7 +59,14 @@ function isGameSnapshot(value: unknown): value is GameSnapshot {
         value !== null &&
         "phase" in value &&
         "players" in value &&
-        "settings" in value
+        "settings" in value &&
+        "serverTiming" in value &&
+        typeof value.serverTiming === "object" &&
+        value.serverTiming !== null &&
+        "receivedAt" in value.serverTiming &&
+        typeof value.serverTiming.receivedAt === "number" &&
+        "sentAt" in value.serverTiming &&
+        typeof value.serverTiming.sentAt === "number"
     );
 }
 
@@ -76,10 +88,18 @@ export function RoomClient({ code }: RoomClientProps) {
     const [isLeaving, setIsLeaving] = useState(false);
     const [connectedPlayerPublicIds, setConnectedPlayerPublicIds] = useState<string[] | null>(null);
     const [now, setNow] = useState(0);
+    const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
+    const refreshVersion = useRef(0);
+    const turnEndsAt = game?.turn?.endsAt;
 
     const refresh = useCallback(async () => {
+        const version = ++refreshVersion.current;
+        const clientSentAt = Date.now();
         const response = await fetch(`/api/rooms/${code}`, { cache: "no-store" });
+        const clientReceivedAt = Date.now();
         const payload: unknown = await response.json().catch(() => null);
+
+        if (version !== refreshVersion.current) return;
 
         if (!response.ok || !isGameSnapshot(payload)) {
             setError(
@@ -93,6 +113,12 @@ export function RoomClient({ code }: RoomClientProps) {
             return;
         }
 
+        setServerClockOffsetMs(estimateServerClockOffsetMs(
+            clientSentAt,
+            clientReceivedAt,
+            payload.serverTiming,
+        ));
+        setNow(clientReceivedAt);
         setGame(payload);
         setError("");
     }, [code]);
@@ -108,14 +134,38 @@ export function RoomClient({ code }: RoomClientProps) {
     }, [refresh]);
 
     useEffect(() => {
-        const initial = window.setTimeout(() => setNow(Date.now()), 0);
-        const timer = window.setInterval(() => setNow(Date.now()), 1000);
+        if (!turnEndsAt) return;
+
+        const endsAt = Date.parse(turnEndsAt);
+        if (!Number.isFinite(endsAt)) return;
+
+        let timer: number | undefined;
+
+        const updateCountdown = () => {
+            const clientNow = Date.now();
+            setNow(clientNow);
+
+            const delay = getNextCountdownUpdateDelay(
+                endsAt - (clientNow + serverClockOffsetMs),
+            );
+            if (delay !== null) {
+                timer = window.setTimeout(updateCountdown, delay);
+            }
+        };
+        const updateWhenVisible = () => {
+            if (document.visibilityState !== "visible") return;
+            if (timer !== undefined) window.clearTimeout(timer);
+            updateCountdown();
+        };
+
+        updateCountdown();
+        document.addEventListener("visibilitychange", updateWhenVisible);
 
         return () => {
-            window.clearTimeout(initial);
-            window.clearInterval(timer);
+            if (timer !== undefined) window.clearTimeout(timer);
+            document.removeEventListener("visibilitychange", updateWhenVisible);
         };
-    }, []);
+    }, [serverClockOffsetMs, turnEndsAt]);
 
     useEffect(() => {
         const socket = io({ path: "/socket.io" });
@@ -218,7 +268,9 @@ export function RoomClient({ code }: RoomClientProps) {
     const currentTurnPlayer = game.turn
         ? game.players.find((player) => player.publicId === game.turn?.currentPlayerPublicId)
         : undefined;
-    const secondsLeft = game.turn ? Math.max(0, Math.ceil((new Date(game.turn.endsAt).getTime() - now) / 1000)) : 0;
+    const secondsLeft = game.turn
+        ? getCountdownSeconds(Date.parse(game.turn.endsAt), now + serverClockOffsetMs)
+        : 0;
     const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerPublicId === selfPlayer?.publicId;
     const canStartGame = game.phase === "LOBBY" && isHost;
     const canBeginVote = game.phase === "DISCUSSION" && isHost && game.turn?.canStartVote === true;
@@ -272,7 +324,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                     <dt className="text-xs uppercase tracking-wider text-muted-foreground">
                                         {game.result.impostorNames.length > 1 ? "Imposteurs" : "Imposteur"}
                                     </dt>
-                                    <dd className="mt-1 font-semibold">
+                                    <dd className="mt-1">
                                         {game.result.impostorNames.join(", ")}
                                     </dd>
                                 </div>
@@ -280,7 +332,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                     <dt className="text-xs uppercase tracking-wider text-muted-foreground">
                                         Mot des civils
                                     </dt>
-                                    <dd className="mt-1 font-semibold">{game.result.civilianWord}</dd>
+                                    <dd className="mt-1">{game.result.civilianWord}</dd>
                                 </div>
                                 <div>
                                     <dt className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -288,7 +340,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                             ? "Mot des imposteurs"
                                             : "Mot de l’imposteur"}
                                     </dt>
-                                    <dd className="mt-1 font-semibold">{game.result.impostorWord}</dd>
+                                    <dd className="mt-1">{game.result.impostorWord}</dd>
                                 </div>
                             </dl>
                         )}

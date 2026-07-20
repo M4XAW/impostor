@@ -1,5 +1,11 @@
 export type GamePhase = "LOBBY" | "DISCUSSION" | "VOTING" | "RESULTS";
-export interface GameSnapshot {
+
+export interface ServerTiming {
+  receivedAt: number;
+  sentAt: number;
+}
+
+export interface GameState {
   code: string;
   phase: GamePhase;
   settings: { wordCount: number; roundCount: number; turnSeconds: number; impostorCount: number };
@@ -15,4 +21,8 @@ export interface GameSnapshot {
     impostorWord: string;
   };
   endReason?: "NOT_ENOUGH_PLAYERS";
+}
+
+export interface GameSnapshot extends GameState {
+  serverTiming: ServerTiming;
 }

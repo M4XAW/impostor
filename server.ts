@@ -2,15 +2,21 @@ import "dotenv/config";
 import { createServer, type IncomingMessage } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
-import { removePlayer } from "@/lib/game";
+import { advanceExpiredTurn, getNextTurnExpiration, removePlayer } from "@/lib/game";
 import { getCookieValue, roomSessionCookieName } from "@/lib/player-cookie";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { notifyRoomChanged, subscribeToRoomChanges } from "@/lib/realtime";
+import {
+  notifyRoomChanged,
+  subscribeToAnyRoomChange,
+  subscribeToRoomChanges,
+} from "@/lib/realtime";
 import { ROOM_CODE_PATTERN } from "@/lib/room-code";
-import { authenticateRoomSession, touchPlayerSessions } from "@/lib/session";
+import { authenticateRoomSession, touchPlayerSessions } from "@/lib/session-auth";
 
 const DISCONNECTION_GRACE_PERIOD_MS = 10_000;
 const MAX_SOCKETS_PER_PLAYER = 3;
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const TURN_SCHEDULER_RECONCILIATION_MS = 1_000;
 
 interface PlayerPresence {
   code: string;
@@ -57,7 +63,7 @@ function isAllowedSocketOrigin(request: IncomingMessage) {
   }
 }
 
-void app.prepare().then(() => {
+void app.prepare().then(async () => {
   const server = createServer((request, response) => {
     request.headers["x-impostor-client-ip"] = getDirectClientAddress(request);
     handle(request, response);
@@ -82,6 +88,71 @@ void app.prepare().then(() => {
   });
   const presenceByPlayer = new Map<string, PlayerPresence>();
   const roomSubscriptions = new Map<string, RoomSubscription>();
+  let scheduledTurnTimer: ReturnType<typeof setTimeout> | undefined;
+  let scheduledTurn: { code: string; endsAt: number } | undefined;
+  let turnScheduleVersion = 0;
+
+  async function scheduleNextTurnExpiration() {
+    const scheduleVersion = ++turnScheduleVersion;
+
+    try {
+      const nextExpiration = await getNextTurnExpiration();
+      if (scheduleVersion !== turnScheduleVersion) return;
+
+      if (!nextExpiration) {
+        if (scheduledTurnTimer) clearTimeout(scheduledTurnTimer);
+        scheduledTurnTimer = undefined;
+        scheduledTurn = undefined;
+        return;
+      }
+
+      const nextExpirationTime = nextExpiration.endsAt.getTime();
+      if (
+        scheduledTurnTimer &&
+        scheduledTurn?.code === nextExpiration.code &&
+        scheduledTurn.endsAt === nextExpirationTime
+      ) {
+        return;
+      }
+
+      if (scheduledTurnTimer) clearTimeout(scheduledTurnTimer);
+      scheduledTurn = { code: nextExpiration.code, endsAt: nextExpirationTime };
+
+      const delay = Math.min(
+        MAX_TIMER_DELAY_MS,
+        Math.max(0, nextExpirationTime - Date.now()),
+      );
+
+      scheduledTurnTimer = setTimeout(() => {
+        scheduledTurnTimer = undefined;
+        scheduledTurn = undefined;
+
+        void advanceExpiredTurn(nextExpiration.code)
+          .then((changed) => {
+            if (changed) {
+              notifyRoomChanged(nextExpiration.code);
+              return;
+            }
+
+            void scheduleNextTurnExpiration();
+          })
+          .catch((error: unknown) => {
+            console.error("Impossible de faire avancer le tour expiré.", error);
+            void scheduleNextTurnExpiration();
+          });
+      }, delay);
+    } catch (error) {
+      if (scheduleVersion !== turnScheduleVersion) return;
+
+      console.error("Impossible de programmer la prochaine fin de tour.", error);
+    }
+  }
+
+  subscribeToAnyRoomChange(() => void scheduleNextTurnExpiration());
+  setInterval(
+    () => void scheduleNextTurnExpiration(),
+    TURN_SCHEDULER_RECONCILIATION_MS,
+  );
 
   setInterval(() => {
     const connectedPlayerIds = [...presenceByPlayer.values()]
@@ -207,6 +278,8 @@ void app.prepare().then(() => {
       }
     });
   });
+
+  await scheduleNextTurnExpiration();
 
   server.listen(port, hostname, () => {
     console.log(`Impostor est disponible sur http://localhost:${port}`);

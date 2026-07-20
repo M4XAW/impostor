@@ -2,8 +2,8 @@ import { randomInt, randomUUID } from "node:crypto";
 import { PlayerRole, Prisma, RoomPhase } from "@/generated/prisma/client";
 import { PublicError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
-import type { PlayerSessionCredential } from "@/lib/session";
-import type { GameSnapshot } from "@/types/game";
+import type { PlayerSessionCredential } from "@/lib/session-token";
+import type { GameState } from "@/types/game";
 
 const MAX_ROOM_CODE_ATTEMPTS = 5;
 const MAX_TRANSACTION_ATTEMPTS = 4;
@@ -371,14 +371,24 @@ export async function startGame(code: string, playerId: string) {
   });
 }
 
-async function synchronizeTurnWithClient(client: Prisma.TransactionClient, code: string) {
+async function advanceTurnWithClient(
+  client: Prisma.TransactionClient,
+  code: string,
+  options: { force?: boolean; now?: Date } = {},
+) {
+  const now = options.now ?? new Date();
   const room = await client.room.findUnique({
     where: { code },
     include: { players: { orderBy: { createdAt: "asc" } } },
   });
 
-  if (!room || room.phase !== RoomPhase.DISCUSSION || !room.turnEndsAt || room.turnEndsAt > new Date()) {
-    return room;
+  if (
+    !room ||
+    room.phase !== RoomPhase.DISCUSSION ||
+    !room.turnEndsAt ||
+    !options.force && room.turnEndsAt > now
+  ) {
+    return { room, changed: false };
   }
 
   const nextIndex = room.currentPlayerIndex + 1;
@@ -387,34 +397,57 @@ async function synchronizeTurnWithClient(client: Prisma.TransactionClient, code:
   const nextWord = completedRound && nextRound > room.roundCount ? room.wordNumber + 1 : room.wordNumber;
 
   if (nextWord > room.wordCount) {
-    return client.room.update({
+    const updatedRoom = await client.room.update({
       where: { id: room.id },
       data: { phase: RoomPhase.VOTING, turnEndsAt: null },
       include: { players: { orderBy: { createdAt: "asc" } } },
     });
+
+    return { room: updatedRoom, changed: true };
   }
 
   const newRound = completedRound && nextRound > room.roundCount ? 1 : nextRound;
-  return client.room.update({
+  const nextTurnStartedAt = options.force ? now : room.turnEndsAt;
+  const updatedRoom = await client.room.update({
     where: { id: room.id },
     data: {
       currentPlayerIndex: completedRound ? 0 : nextIndex,
       roundNumber: newRound,
       wordNumber: nextWord,
-      turnEndsAt: new Date(Date.now() + room.turnSeconds * 1000),
+      turnEndsAt: new Date(nextTurnStartedAt.getTime() + room.turnSeconds * 1000),
     },
     include: { players: { orderBy: { createdAt: "asc" } } },
   });
+
+  return { room: updatedRoom, changed: true };
 }
 
-async function synchronizeTurn(code: string) {
-  return runSerializable((transaction) => synchronizeTurnWithClient(transaction, code));
+export async function getNextTurnExpiration() {
+  const room = await prisma.room.findFirst({
+    where: {
+      phase: RoomPhase.DISCUSSION,
+      turnEndsAt: { not: null },
+    },
+    orderBy: { turnEndsAt: "asc" },
+    select: { code: true, turnEndsAt: true },
+  });
+
+  if (!room?.turnEndsAt) return null;
+
+  return { code: room.code, endsAt: room.turnEndsAt };
+}
+
+export async function advanceExpiredTurn(code: string, now = new Date()) {
+  return runSerializable(async (transaction) => {
+    const { changed } = await advanceTurnWithClient(transaction, code, { now });
+    return changed;
+  });
 }
 
 export async function submitClue(code: string, playerId: string, content: string) {
   try {
     await runSerializable(async (transaction) => {
-      const room = await synchronizeTurnWithClient(transaction, code);
+      const { room } = await advanceTurnWithClient(transaction, code);
       if (!room || room.phase !== RoomPhase.DISCUSSION || room.players[room.currentPlayerIndex]?.id !== playerId) {
         throw new PublicError("Ce n'est pas votre tour.", 409);
       }
@@ -434,11 +467,7 @@ export async function submitClue(code: string, playerId: string, content: string
           roundNumber: room.roundNumber,
         },
       });
-      await transaction.room.update({
-        where: { id: room.id },
-        data: { turnEndsAt: new Date(0) },
-      });
-      await synchronizeTurnWithClient(transaction, code);
+      await advanceTurnWithClient(transaction, code, { force: true });
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -450,7 +479,7 @@ export async function submitClue(code: string, playerId: string, content: string
 
 export async function beginVote(code: string, playerId: string) {
   await runSerializable(async (transaction) => {
-    const room = await synchronizeTurnWithClient(transaction, code);
+    const { room } = await advanceTurnWithClient(transaction, code);
     if (!room || !isHost(room.players, playerId)) throw new PublicError("Action non autorisée.", 403);
     if (room.phase !== RoomPhase.DISCUSSION || room.roundNumber === 1 && room.wordNumber === 1) {
       throw new PublicError("Terminez au moins un tour complet avant le vote.", 409);
@@ -515,8 +544,7 @@ export async function castVote(code: string, voterId: string, targetPublicId: st
   }
 }
 
-export async function getSnapshot(code: string, playerId: string): Promise<GameSnapshot | null> {
-  await synchronizeTurn(code);
+export async function getSnapshot(code: string, playerId: string): Promise<GameState | null> {
   const room = await prisma.room.findUnique({
     where: { code },
     include: {
