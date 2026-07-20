@@ -1,4 +1,4 @@
-import { RiLoaderFill } from "@remixicon/react";
+import { Loader } from 'pixelarticons/react'
 
 interface FullScreenLoaderProps {
   label?: string;
@@ -11,7 +11,7 @@ function FullScreenLoader({ label = "Chargement en cours" }: FullScreenLoaderPro
       role="status"
       aria-live="polite"
     >
-      <RiLoaderFill className="size-6 animate-spin" aria-hidden="true" />
+      <Loader className="size-6 animate-spin" aria-hidden="true" />
       <span className="sr-only">{label}</span>
     </div>
   );

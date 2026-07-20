@@ -9,7 +9,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader } from "./ui/card";
 
-import { RiLoaderFill } from "@remixicon/react"
+import { Loader } from 'pixelarticons/react'
 
 type EntryMode = "create" | "join";
 
@@ -116,7 +116,7 @@ export function GameEntry({ joinCode }: GameEntryProps) {
                         )}
 
                         <Button type="submit" className="w-full" disabled={isSubmitting}>
-                            {isSubmitting ? <RiLoaderFill className="animate-spin" /> : isCreating ? "Créer la partie" : "Rejoindre la partie"}
+                            {!isSubmitting ? <Loader className="animate-spin" /> : isCreating ? "Créer la partie" : "Rejoindre la partie"}
                         </Button>
                     </FieldGroup>
                 </form>

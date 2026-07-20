@@ -21,7 +21,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ButtonGroup } from "@/components/ui/button-group";
 
-import { CornerUpRight, AvatarCircle, Copy } from 'pixelarticons/react'
+import { CornerUpRight, AvatarCircle, Copy, Loader } from 'pixelarticons/react'
 
 interface RoomClientProps {
     code: string;
@@ -242,7 +242,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                 disabled={isLeaving}
                                 onClick={() => void leaveRoom()}
                             >
-                                {isLeaving ? "Départ…" : "Quitter"}
+                                {isLeaving ? <Loader className="animate-spin" /> : "Quitter"}
                             </Button>
                         </div>
 
