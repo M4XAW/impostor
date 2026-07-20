@@ -256,10 +256,37 @@ export function RoomClient({ code }: RoomClientProps) {
                                         ? game.endReason === "NOT_ENOUGH_PLAYERS"
                                             ? "Partie terminée"
                                             : game.winner === "CIVILIANS"
-                                                ? "Les autres joueurs gagnent"
+                                                ? "Les civils gagnent"
                                                 : "L’imposteur gagne"
                                         : "Qui est l’imposteur ?"}
                         </h1>
+
+                        {game.phase === "RESULTS" && game.result && (
+                            <dl className="mt-6 grid gap-3 border bg-muted/40 p-4 sm:grid-cols-3">
+                                <div>
+                                    <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+                                        {game.result.impostorNames.length > 1 ? "Imposteurs" : "Imposteur"}
+                                    </dt>
+                                    <dd className="mt-1 font-semibold">
+                                        {game.result.impostorNames.join(", ")}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+                                        Mot des civils
+                                    </dt>
+                                    <dd className="mt-1 font-semibold">{game.result.civilianWord}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+                                        {game.result.impostorNames.length > 1
+                                            ? "Mot des imposteurs"
+                                            : "Mot de l’imposteur"}
+                                    </dt>
+                                    <dd className="mt-1 font-semibold">{game.result.impostorWord}</dd>
+                                </div>
+                            </dl>
+                        )}
 
                         {game.endReason === "NOT_ENOUGH_PLAYERS" && (
                             <p className="mt-2 text-sm text-muted-foreground" role="status">
