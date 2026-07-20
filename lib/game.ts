@@ -448,11 +448,23 @@ export async function advanceExpiredTurn(code: string, now = new Date()) {
   });
 }
 
-export async function submitClue(code: string, playerId: string, content: string) {
+export type SubmitClueResult =
+  | { accepted: true }
+  | { accepted: false; reason: "TURN_EXPIRED" };
+
+export async function submitClue(
+  code: string,
+  playerId: string,
+  content: string,
+): Promise<SubmitClueResult> {
   try {
-    await runSerializable(async (transaction) => {
-      const { room } = await advanceTurnWithClient(transaction, code);
+    return await runSerializable(async (transaction) => {
+      const { room, changed } = await advanceTurnWithClient(transaction, code);
       if (!room || room.phase !== RoomPhase.DISCUSSION || room.players[room.currentPlayerIndex]?.id !== playerId) {
+        if (changed) {
+          return { accepted: false, reason: "TURN_EXPIRED" };
+        }
+
         throw new PublicError("Ce n'est pas votre tour.", 409);
       }
 
@@ -472,6 +484,7 @@ export async function submitClue(code: string, playerId: string, content: string
         },
       });
       await advanceTurnWithClient(transaction, code, { force: true, room });
+      return { accepted: true };
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

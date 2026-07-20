@@ -41,6 +41,8 @@ interface RoomPresence {
     connectedPlayerPublicIds: string[];
 }
 
+const TURN_EXPIRATION_RECONCILIATION_DELAY_MS = 250;
+
 const settingFields: Array<{
     name: SettingName;
     label: string;
@@ -94,6 +96,7 @@ export function RoomClient({ code }: RoomClientProps) {
     const refreshVersion = useRef(0);
     const pendingActionCount = useRef(0);
     const refreshQueued = useRef(false);
+    const reconciledTurnEndsAt = useRef<string | undefined>(undefined);
     const turnEndsAt = game?.turn?.endsAt;
 
     const applySnapshot = useCallback((
@@ -147,96 +150,6 @@ export function RoomClient({ code }: RoomClientProps) {
         }
     }, [applySnapshot, code]);
 
-    useEffect(() => {
-        const initial = window.setTimeout(() => void refresh(), 0);
-
-        return () => {
-            window.clearTimeout(initial);
-        };
-    }, [refresh]);
-
-    useEffect(() => {
-        const refreshIntervalMs = isRealtimeConnected ? 30_000 : 2_000;
-        const interval = window.setInterval(() => void refresh(), refreshIntervalMs);
-
-        return () => window.clearInterval(interval);
-    }, [isRealtimeConnected, refresh]);
-
-    useEffect(() => {
-        const refreshWhenVisible = () => {
-            if (document.visibilityState === "visible") void refresh();
-        };
-
-        document.addEventListener("visibilitychange", refreshWhenVisible);
-        return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
-    }, [refresh]);
-
-    useEffect(() => {
-        if (!turnEndsAt) return;
-
-        const endsAt = Date.parse(turnEndsAt);
-        if (!Number.isFinite(endsAt)) return;
-
-        let timer: number | undefined;
-
-        const updateCountdown = () => {
-            const clientNow = Date.now();
-            setNow(clientNow);
-
-            const delay = getNextCountdownUpdateDelay(
-                endsAt - (clientNow + serverClockOffsetMs),
-            );
-            if (delay !== null) {
-                timer = window.setTimeout(updateCountdown, delay);
-            }
-        };
-        const updateWhenVisible = () => {
-            if (document.visibilityState !== "visible") return;
-            if (timer !== undefined) window.clearTimeout(timer);
-            updateCountdown();
-        };
-
-        updateCountdown();
-        document.addEventListener("visibilitychange", updateWhenVisible);
-
-        return () => {
-            if (timer !== undefined) window.clearTimeout(timer);
-            document.removeEventListener("visibilitychange", updateWhenVisible);
-        };
-    }, [serverClockOffsetMs, turnEndsAt]);
-
-    useEffect(() => {
-        const socket = io({ path: "/socket.io" });
-        const watchRoom = () => socket.emit("room:watch", code);
-        const markRealtimeDisconnected = () => setIsRealtimeConnected(false);
-
-        socket.on("connect", watchRoom);
-        socket.on("room:changed", () => void refresh());
-        socket.on("disconnect", markRealtimeDisconnected);
-        socket.on("connect_error", markRealtimeDisconnected);
-        socket.on("room:presence", (presence: unknown) => {
-            if (isRoomPresence(presence)) {
-                setIsRealtimeConnected(true);
-                setConnectedPlayerPublicIds(presence.connectedPlayerPublicIds);
-            }
-        });
-
-        return () => {
-            socket.off("connect", watchRoom);
-            socket.off("disconnect", markRealtimeDisconnected);
-            socket.off("connect_error", markRealtimeDisconnected);
-            socket.disconnect();
-        };
-    }, [code, refresh]);
-
-    useEffect(() => {
-        if (copiedSlotIndex === null) return;
-
-        const timeout = window.setTimeout(() => setCopiedSlotIndex(null), 500);
-
-        return () => window.clearTimeout(timeout);
-    }, [copiedSlotIndex]);
-
     const play = useCallback(async (payload: Record<string, unknown>): Promise<boolean> => {
         pendingActionCount.current += 1;
         refreshVersion.current += 1;
@@ -279,6 +192,111 @@ export function RoomClient({ code }: RoomClientProps) {
             }
         }
     }, [applySnapshot, code, refresh]);
+
+    useEffect(() => {
+        const initial = window.setTimeout(() => void refresh(), 0);
+
+        return () => {
+            window.clearTimeout(initial);
+        };
+    }, [refresh]);
+
+    useEffect(() => {
+        const refreshIntervalMs = isRealtimeConnected ? 30_000 : 2_000;
+        const interval = window.setInterval(() => void refresh(), refreshIntervalMs);
+
+        return () => window.clearInterval(interval);
+    }, [isRealtimeConnected, refresh]);
+
+    useEffect(() => {
+        const refreshWhenVisible = () => {
+            if (document.visibilityState === "visible") void refresh();
+        };
+
+        document.addEventListener("visibilitychange", refreshWhenVisible);
+        return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
+    }, [refresh]);
+
+    useEffect(() => {
+        if (!turnEndsAt) return;
+
+        const endsAt = Date.parse(turnEndsAt);
+        if (!Number.isFinite(endsAt)) return;
+
+        let timer: number | undefined;
+        let active = true;
+
+        const updateCountdown = () => {
+            const clientNow = Date.now();
+            setNow(clientNow);
+
+            const delay = getNextCountdownUpdateDelay(
+                endsAt - (clientNow + serverClockOffsetMs),
+            );
+            if (delay !== null) {
+                timer = window.setTimeout(updateCountdown, delay);
+                return;
+            }
+
+            if (reconciledTurnEndsAt.current !== turnEndsAt) {
+                reconciledTurnEndsAt.current = turnEndsAt;
+                timer = window.setTimeout(() => {
+                    void play({ action: "syncTimer" }).then((synchronized) => {
+                        if (synchronized || !active) return;
+
+                        reconciledTurnEndsAt.current = undefined;
+                        timer = window.setTimeout(updateCountdown, 1_000);
+                    });
+                }, TURN_EXPIRATION_RECONCILIATION_DELAY_MS);
+            }
+        };
+        const updateWhenVisible = () => {
+            if (document.visibilityState !== "visible") return;
+            if (timer !== undefined) window.clearTimeout(timer);
+            updateCountdown();
+        };
+
+        updateCountdown();
+        document.addEventListener("visibilitychange", updateWhenVisible);
+
+        return () => {
+            active = false;
+            if (timer !== undefined) window.clearTimeout(timer);
+            document.removeEventListener("visibilitychange", updateWhenVisible);
+        };
+    }, [play, serverClockOffsetMs, turnEndsAt]);
+
+    useEffect(() => {
+        const socket = io({ path: "/socket.io" });
+        const watchRoom = () => socket.emit("room:watch", code);
+        const markRealtimeDisconnected = () => setIsRealtimeConnected(false);
+
+        socket.on("connect", watchRoom);
+        socket.on("room:changed", () => void refresh());
+        socket.on("disconnect", markRealtimeDisconnected);
+        socket.on("connect_error", markRealtimeDisconnected);
+        socket.on("room:presence", (presence: unknown) => {
+            if (isRoomPresence(presence)) {
+                setIsRealtimeConnected(true);
+                setConnectedPlayerPublicIds(presence.connectedPlayerPublicIds);
+            }
+        });
+
+        return () => {
+            socket.off("connect", watchRoom);
+            socket.off("disconnect", markRealtimeDisconnected);
+            socket.off("connect_error", markRealtimeDisconnected);
+            socket.disconnect();
+        };
+    }, [code, refresh]);
+
+    useEffect(() => {
+        if (copiedSlotIndex === null) return;
+
+        const timeout = window.setTimeout(() => setCopiedSlotIndex(null), 500);
+
+        return () => window.clearTimeout(timeout);
+    }, [copiedSlotIndex]);
 
     async function copyInvite(slotIndex: number) {
         await navigator.clipboard.writeText(`${window.location.origin}/join/${code}`);
@@ -336,7 +354,10 @@ export function RoomClient({ code }: RoomClientProps) {
     const secondsLeft = game.turn
         ? getCountdownSeconds(Date.parse(game.turn.endsAt), now + serverClockOffsetMs)
         : 0;
-    const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerPublicId === selfPlayer?.publicId;
+    const canSubmitClue =
+        game.phase === "DISCUSSION" &&
+        game.turn?.currentPlayerPublicId === selfPlayer?.publicId &&
+        secondsLeft > 0;
     const canStartGame = game.phase === "LOBBY" && isHost;
     const canBeginVote = game.phase === "DISCUSSION" && isHost && game.turn?.canStartVote === true;
     const hasCurrentPlayerVoted = game.players.some(

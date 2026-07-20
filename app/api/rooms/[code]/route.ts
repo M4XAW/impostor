@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { publicErrorResponse, PublicError } from "@/lib/errors";
 import {
+  advanceExpiredTurn,
   beginVote,
   castVote,
   getSnapshot,
@@ -25,6 +26,7 @@ import type { GameSnapshot } from "@/types/game";
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("start") }),
+  z.object({ action: z.literal("syncTimer") }),
   z.object({ action: z.literal("beginVote") }),
   z.object({ action: z.literal("vote"), targetPublicId: z.string().uuid() }),
   z.object({ action: z.literal("transferHost"), targetPlayerPublicId: z.string().uuid() }),
@@ -116,8 +118,12 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
     const parsed = actionSchema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new PublicError("Action invalide.");
     let removedPlayerPublicId: string | undefined;
+    let roomChanged = parsed.data.action !== "syncTimer";
 
     if (parsed.data.action === "start") await startGame(code, player.id);
+    if (parsed.data.action === "syncTimer") {
+      roomChanged = await advanceExpiredTurn(code);
+    }
     if (parsed.data.action === "beginVote") await beginVote(code, player.id);
     if (parsed.data.action === "vote") {
       await castVote(code, player.id, parsed.data.targetPublicId);
@@ -129,7 +135,14 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
       await kickPlayer(code, player.id, parsed.data.targetPlayerPublicId);
       removedPlayerPublicId = parsed.data.targetPlayerPublicId;
     }
-    if (parsed.data.action === "clue") await submitClue(code, player.id, parsed.data.content);
+    if (parsed.data.action === "clue") {
+      const result = await submitClue(code, player.id, parsed.data.content);
+
+      if (!result.accepted) {
+        notifyRoomChanged(code);
+        throw new PublicError("Le temps est écoulé. Le tour est passé au joueur suivant.", 409);
+      }
+    }
     if (parsed.data.action === "leave") {
       await removePlayer(code, player.id);
       await clearRoomSessionToken(code);
@@ -145,7 +158,9 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
       });
     }
 
-    notifyRoomChanged(code, { removedPlayerPublicId });
+    if (roomChanged) {
+      notifyRoomChanged(code, { removedPlayerPublicId });
+    }
 
     if (parsed.data.action === "leave") {
       return privateJson({ ok: true });
