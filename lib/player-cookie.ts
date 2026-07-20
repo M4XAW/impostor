@@ -1,5 +1,5 @@
-export function roomPlayerCookieName(code: string) {
-  return `impostor_player_${code}`;
+export function roomSessionCookieName(code: string) {
+  return `impostor_session_${code}`;
 }
 
 export function getCookieValue(cookieHeader: string | undefined, name: string) {

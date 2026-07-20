@@ -24,6 +24,7 @@ interface TransferHostContextMenuProps {
   playerName: string;
   disabled?: boolean;
   onConfirm: () => void;
+  onRemove: () => void;
 }
 
 export function TransferHostContextMenu({
@@ -31,8 +32,9 @@ export function TransferHostContextMenu({
   playerName,
   disabled = false,
   onConfirm,
+  onRemove,
 }: TransferHostContextMenuProps) {
-  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"transfer" | "remove" | null>(null);
 
   return (
     <>
@@ -41,25 +43,42 @@ export function TransferHostContextMenu({
         <ContextMenuContent>
           <ContextMenuItem
             disabled={disabled}
-            onSelect={() => setConfirmationOpen(true)}
+            onSelect={() => setPendingAction("transfer")}
           >
             <Crown aria-hidden="true" />
             Transférer le rôle d’hôte
           </ContextMenuItem>
+          <ContextMenuItem onSelect={() => setPendingAction("remove")}>
+            Retirer du salon
+          </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
 
-      <AlertDialog open={confirmationOpen} onOpenChange={setConfirmationOpen}>
+      <AlertDialog
+        open={pendingAction !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingAction(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Transférer le rôle d’hôte ?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {pendingAction === "remove" ? "Retirer ce joueur ?" : "Transférer le rôle d’hôte ?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {playerName} pourra modifier les paramètres et lancer la partie. Tu perdras immédiatement ces droits.
+              {pendingAction === "remove"
+                ? `${playerName} sera retiré du salon et devra le rejoindre à nouveau.`
+                : `${playerName} pourra modifier les paramètres et lancer la partie. Tu perdras immédiatement ces droits.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={onConfirm}>Confirmer le transfert</AlertDialogAction>
+            <AlertDialogAction
+              variant={pendingAction === "remove" ? "destructive" : "default"}
+              onClick={pendingAction === "remove" ? onRemove : onConfirm}
+            >
+              {pendingAction === "remove" ? "Retirer" : "Confirmer le transfert"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

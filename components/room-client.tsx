@@ -32,7 +32,7 @@ interface RoomClientProps {
 type SettingName = keyof GameSnapshot["settings"];
 
 interface RoomPresence {
-    connectedPlayerIds: string[];
+    connectedPlayerPublicIds: string[];
 }
 
 const settingFields: Array<{
@@ -61,9 +61,9 @@ function isRoomPresence(value: unknown): value is RoomPresence {
     return (
         typeof value === "object" &&
         value !== null &&
-        "connectedPlayerIds" in value &&
-        Array.isArray(value.connectedPlayerIds) &&
-        value.connectedPlayerIds.every((playerId) => typeof playerId === "string")
+        "connectedPlayerPublicIds" in value &&
+        Array.isArray(value.connectedPlayerPublicIds) &&
+        value.connectedPlayerPublicIds.every((publicId) => typeof publicId === "string")
     );
 }
 
@@ -73,7 +73,7 @@ export function RoomClient({ code }: RoomClientProps) {
     const [clue, setClue] = useState("");
     const [copiedSlotIndex, setCopiedSlotIndex] = useState<number | null>(null);
     const [isLeaving, setIsLeaving] = useState(false);
-    const [connectedPlayerIds, setConnectedPlayerIds] = useState<string[] | null>(null);
+    const [connectedPlayerPublicIds, setConnectedPlayerPublicIds] = useState<string[] | null>(null);
     const [now, setNow] = useState(0);
 
     const refresh = useCallback(async () => {
@@ -124,7 +124,7 @@ export function RoomClient({ code }: RoomClientProps) {
         socket.on("room:changed", () => void refresh());
         socket.on("room:presence", (presence: unknown) => {
             if (isRoomPresence(presence)) {
-                setConnectedPlayerIds(presence.connectedPlayerIds);
+                setConnectedPlayerPublicIds(presence.connectedPlayerPublicIds);
             }
         });
 
@@ -213,15 +213,18 @@ export function RoomClient({ code }: RoomClientProps) {
     }
 
     const isHost = game.currentPlayer.isHost;
-    const currentTurnPlayer = game.turn ? game.players.find((player) => player.id === game.turn?.currentPlayerId) : undefined;
+    const selfPlayer = game.players.find((player) => player.isSelf);
+    const currentTurnPlayer = game.turn
+        ? game.players.find((player) => player.publicId === game.turn?.currentPlayerPublicId)
+        : undefined;
     const secondsLeft = game.turn ? Math.max(0, Math.ceil((new Date(game.turn.endsAt).getTime() - now) / 1000)) : 0;
-    const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerId === game.currentPlayer.id;
+    const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerPublicId === selfPlayer?.publicId;
     const canStartGame = game.phase === "LOBBY" && isHost;
     const canBeginVote = game.phase === "DISCUSSION" && isHost && game.turn?.canStartVote === true;
     const hasCurrentPlayerVoted = game.players.some(
-        (player) => player.id === game.currentPlayer.id && player.hasVoted,
+        (player) => player.isSelf && player.hasVoted,
     );
-    const isPlayerConnected = (playerId: string) => connectedPlayerIds?.includes(playerId) ?? true;
+    const isPlayerConnected = (publicId: string) => connectedPlayerPublicIds?.includes(publicId) ?? true;
 
     return (
         <main className="mx-auto w-full max-w-7xl px-5 pb-12 sm:px-8 lg:px-12">
@@ -320,10 +323,10 @@ export function RoomClient({ code }: RoomClientProps) {
                                     aria-label="Joueurs du salon"
                                 >
                                     {game.players.map((player) => {
-                                        const canTransferHost = isHost && player.id !== game.currentPlayer.id;
+                                        const canTransferHost = isHost && !player.isSelf;
                                         const playerCard = (
                                             <li
-                                                key={player.id}
+                                                key={player.publicId}
                                                 className={`grid aspect-square min-w-0 place-items-center border border-dotted ${player.isHost ? "border-white bg-white text-black" : ""} ${canTransferHost ? "cursor-context-menu focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" : ""}`}
                                                 tabIndex={canTransferHost ? 0 : undefined}
                                                 aria-label={canTransferHost ? `${player.name}, menu de gestion du joueur` : undefined}
@@ -331,12 +334,12 @@ export function RoomClient({ code }: RoomClientProps) {
                                                 <div className="flex flex-col items-center gap-2">
                                                     <AvatarCircle />
                                                     <div
-                                                        className={`flex max-w-full flex-col items-center gap-1 transition-opacity ${isPlayerConnected(player.id) ? "" : "opacity-40"}`}
+                                                        className={`flex max-w-full flex-col items-center gap-1 transition-opacity ${isPlayerConnected(player.publicId) ? "" : "opacity-40"}`}
                                                     >
                                                         <span className="max-w-full wrap-anywhere text-center">
                                                             {player.name}
                                                         </span>
-                                                        {!isPlayerConnected(player.id) && (
+                                                        {!isPlayerConnected(player.publicId) && (
                                                             <span className="sr-only"> — hors ligne</span>
                                                         )}
                                                     </div>
@@ -350,12 +353,16 @@ export function RoomClient({ code }: RoomClientProps) {
 
                                         return (
                                             <TransferHostContextMenu
-                                                key={player.id}
+                                                key={player.publicId}
                                                 playerName={player.name}
-                                                disabled={!isPlayerConnected(player.id)}
+                                                disabled={!isPlayerConnected(player.publicId)}
                                                 onConfirm={() => void play({
                                                     action: "transferHost",
-                                                    targetPlayerId: player.id,
+                                                    targetPlayerPublicId: player.publicId,
+                                                })}
+                                                onRemove={() => void play({
+                                                    action: "kick",
+                                                    targetPlayerPublicId: player.publicId,
                                                 })}
                                             >
                                                 {playerCard}
@@ -415,27 +422,27 @@ export function RoomClient({ code }: RoomClientProps) {
                         )}
 
                         {game.phase !== "LOBBY" && (
-                            <RoundGrid game={game} connectedPlayerIds={connectedPlayerIds} />
+                            <RoundGrid game={game} connectedPlayerPublicIds={connectedPlayerPublicIds} />
                         )}
 
                         {game.phase === "VOTING" && (
                             <ul className="mt-7 space-y-2">
                                 {game.players.map((player) => (
                                     <li
-                                        key={player.id}
-                                        className={`flex items-center gap-3 border px-4 py-3 transition-opacity ${isPlayerConnected(player.id) ? "" : "opacity-40"}`}
+                                        key={player.publicId}
+                                        className={`flex items-center gap-3 border px-4 py-3 transition-opacity ${isPlayerConnected(player.publicId) ? "" : "opacity-40"}`}
                                     >
                                         <span className="min-w-0 flex-1 truncate">
                                             {player.name}
-                                            {player.id === game.currentPlayer.id ? " (toi)" : ""}
+                                            {player.isSelf ? " (toi)" : ""}
                                         </span>
-                                        {player.id !== game.currentPlayer.id && (
+                                        {!player.isSelf && (
                                             <Button
                                                 disabled={hasCurrentPlayerVoted}
                                                 onClick={() =>
                                                     void play({
                                                         action: "vote",
-                                                        targetId: player.id,
+                                                        targetPublicId: player.publicId,
                                                     })
                                                 }
                                             >
@@ -458,7 +465,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                     <ul className="mt-2 space-y-2">
                                         {game.votes.map((vote) => (
                                             <li
-                                                key={`${vote.voterName}-${vote.targetName}`}
+                                                key={`${vote.voterPublicId}-${vote.targetPublicId}`}
                                                 className="bg-muted px-4 py-2 text-sm"
                                             >
                                                 <strong>{vote.voterName}</strong> a voté pour{" "}

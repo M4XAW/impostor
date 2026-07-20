@@ -89,18 +89,24 @@ model Clue {
 }
 
 model Player {
-  id        String     @id @default(cuid())
-  name      String
-  role      PlayerRole @default(CIVILIAN)
-  isHost    Boolean    @default(false)
-  createdAt DateTime   @default(now())
-  roomId    String
-  room      Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  votes     Vote[]     @relation("Voter")
-  received  Vote[]     @relation("Target")
-  clues     Clue[]
+  id                 String     @id @default(cuid())
+  publicId           String     @default(uuid())
+  sessionTokenHash   String     @unique
+  sessionExpiresAt   DateTime
+  lastSeenAt         DateTime   @default(now())
+  name               String
+  role               PlayerRole @default(CIVILIAN)
+  isHost             Boolean    @default(false)
+  createdAt          DateTime   @default(now())
+  roomId             String
+  room               Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  votes              Vote[]     @relation("Voter")
+  received           Vote[]     @relation("Target")
+  clues              Clue[]
 
   @@index([roomId])
+  @@index([lastSeenAt])
+  @@unique([roomId, publicId])
 }
 
 model Vote {

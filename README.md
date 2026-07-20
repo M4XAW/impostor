@@ -66,6 +66,9 @@ Copy-Item .env.example .env
 ```
 
 La valeur par défaut de `DATABASE_URL` cible la base PostgreSQL exposée sur `localhost:5433`.
+Le port PostgreSQL est lié uniquement à l’interface locale. En production, remplacez
+`POSTGRES_PASSWORD`, configurez l’origine HTTPS exacte dans `APP_ORIGIN` et activez
+`TRUST_PROXY` uniquement derrière un reverse proxy maîtrisé.
 
 ### 4. Générer Prisma et appliquer les migrations
 
@@ -122,8 +125,11 @@ Ouvrez ensuite [http://localhost:5555](http://localhost:5555).
 - `app/` : pages App Router et routes API
 - `components/` : composants d’interface
 - `lib/game.ts` : règles du jeu exécutées sur le serveur
-- `lib/session.ts` : association sécurisée d’un joueur à sa partie
+- `lib/session.ts` : session serveur par token aléatoire, distincte des identifiants publics
 - `prisma/` : schéma PostgreSQL et migrations
 - `server.ts` : serveur Next.js + Socket.IO
 
 Les rôles, le mot secret, les votes et le résultat sont déterminés côté serveur. Le client ne reçoit que les informations qui le concernent.
+Les identifiants Prisma des joueurs restent côté serveur ; le navigateur reçoit uniquement
+des identifiants publics propres au salon. Une migration de sécurité invalide les cookies
+des parties créées avant son déploiement.

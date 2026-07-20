@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "tsx server.ts",
     "lint": "eslint",
+    "test": "tsx --test tests/*.test.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {

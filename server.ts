@@ -1,18 +1,28 @@
 import "dotenv/config";
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
-import { isPlayerInRoom, removePlayer } from "@/lib/game";
-import { getCookieValue, roomPlayerCookieName } from "@/lib/player-cookie";
+import { removePlayer } from "@/lib/game";
+import { getCookieValue, roomSessionCookieName } from "@/lib/player-cookie";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { notifyRoomChanged, subscribeToRoomChanges } from "@/lib/realtime";
+import { ROOM_CODE_PATTERN } from "@/lib/room-code";
+import { authenticateRoomSession, touchPlayerSessions } from "@/lib/session";
 
 const DISCONNECTION_GRACE_PERIOD_MS = 10_000;
+const MAX_SOCKETS_PER_PLAYER = 3;
 
 interface PlayerPresence {
   code: string;
   playerId: string;
+  playerPublicId: string;
   socketIds: Set<string>;
   removalTimer?: ReturnType<typeof setTimeout>;
+}
+
+interface RoomSubscription {
+  socketCount: number;
+  unsubscribe: () => void;
 }
 
 const development = process.env.NODE_ENV !== "production";
@@ -21,72 +31,180 @@ const port = Number(process.env.PORT ?? 3000);
 const app = next({ dev: development, hostname, port });
 const handle = app.getRequestHandler();
 
+function getDirectClientAddress(request: IncomingMessage) {
+  if (process.env.TRUST_PROXY === "true") {
+    const forwardedFor = request.headers["x-forwarded-for"];
+    const firstAddress = (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor)
+      ?.split(",")[0]
+      ?.trim();
+    if (firstAddress) return firstAddress;
+  }
+
+  return request.socket.remoteAddress ?? "unknown";
+}
+
+function isAllowedSocketOrigin(request: IncomingMessage) {
+  const origin = request.headers.origin;
+  if (!origin) return true;
+
+  const configuredOrigin = process.env.APP_ORIGIN?.replace(/\/$/, "");
+  if (configuredOrigin) return origin === configuredOrigin;
+
+  try {
+    return new URL(origin).host === request.headers.host;
+  } catch {
+    return false;
+  }
+}
+
 void app.prepare().then(() => {
-  const server = createServer(handle);
-  const io = new Server(server, { path: "/socket.io" });
+  const server = createServer((request, response) => {
+    request.headers["x-impostor-client-ip"] = getDirectClientAddress(request);
+    handle(request, response);
+  });
+  const io = new Server(server, {
+    path: "/socket.io",
+    serveClient: false,
+    maxHttpBufferSize: 16_384,
+    allowRequest: (request, callback) => {
+      try {
+        if (!isAllowedSocketOrigin(request)) {
+          callback("Origine refusée.", false);
+          return;
+        }
+
+        enforceRateLimit(`socket:connect:${getDirectClientAddress(request)}`, 30, 60_000);
+        callback(null, true);
+      } catch {
+        callback("Trop de connexions.", false);
+      }
+    },
+  });
   const presenceByPlayer = new Map<string, PlayerPresence>();
+  const roomSubscriptions = new Map<string, RoomSubscription>();
+
+  setInterval(() => {
+    const connectedPlayerIds = [...presenceByPlayer.values()]
+      .filter((presence) => presence.socketIds.size > 0)
+      .map((presence) => presence.playerId);
+
+    void touchPlayerSessions(connectedPlayerIds).catch((error: unknown) => {
+      console.error("Impossible de rafraîchir la présence des joueurs.", error);
+    });
+  }, 30_000);
 
   function presenceKey(code: string, playerId: string) {
     return `${code}:${playerId}`;
   }
 
   function emitRoomPresence(code: string) {
-    const connectedPlayerIds = [...presenceByPlayer.values()]
+    const connectedPlayerPublicIds = [...presenceByPlayer.values()]
       .filter((presence) => presence.code === code && presence.socketIds.size > 0)
-      .map((presence) => presence.playerId);
+      .map((presence) => presence.playerPublicId);
 
-    io.to(code).emit("room:presence", { connectedPlayerIds });
+    io.to(code).emit("room:presence", { connectedPlayerPublicIds });
+  }
+
+  function addRoomSubscription(code: string) {
+    const current = roomSubscriptions.get(code);
+    if (current) {
+      current.socketCount += 1;
+      return;
+    }
+
+    roomSubscriptions.set(code, {
+      socketCount: 1,
+      unsubscribe: subscribeToRoomChanges(code, (change) => {
+        if (change.removedPlayerPublicId) {
+          const removedPresence = [...presenceByPlayer.values()].find(
+            (presence) =>
+              presence.code === code &&
+              presence.playerPublicId === change.removedPlayerPublicId,
+          );
+
+          removedPresence?.socketIds.forEach((socketId) => {
+            io.sockets.sockets.get(socketId)?.disconnect(true);
+          });
+        }
+
+        io.to(code).emit("room:changed");
+      }),
+    });
+  }
+
+  function removeRoomSubscription(code: string) {
+    const current = roomSubscriptions.get(code);
+    if (!current) return;
+
+    current.socketCount -= 1;
+    if (current.socketCount > 0) return;
+
+    current.unsubscribe();
+    roomSubscriptions.delete(code);
   }
 
   io.on("connection", (socket) => {
     socket.on("room:watch", async (code: string) => {
-      if (!/^[A-Za-z0-9]{3,8}-[A-Za-z0-9]{4,8}$/.test(code)) return;
-      if (typeof socket.data.presenceKey === "string") return;
+      if (!ROOM_CODE_PATTERN.test(code)) return;
+      if (socket.data.watchPending === true || typeof socket.data.presenceKey === "string") return;
+      socket.data.watchPending = true;
 
-      const playerId = getCookieValue(
-        socket.request.headers.cookie,
-        roomPlayerCookieName(code),
-      );
+      try {
+        const sessionToken = getCookieValue(
+          socket.request.headers.cookie,
+          roomSessionCookieName(code),
+        );
+        const player = await authenticateRoomSession(code, sessionToken);
+        if (!player || !socket.connected) return;
 
-      if (!playerId || !await isPlayerInRoom(code, playerId) || !socket.connected) return;
+        const key = presenceKey(code, player.id);
+        const presence = presenceByPlayer.get(key) ?? {
+          code,
+          playerId: player.id,
+          playerPublicId: player.publicId,
+          socketIds: new Set<string>(),
+        };
 
-      const key = presenceKey(code, playerId);
-      const presence = presenceByPlayer.get(key) ?? {
-        code,
-        playerId,
-        socketIds: new Set<string>(),
-      };
+        if (presence.socketIds.size >= MAX_SOCKETS_PER_PLAYER) {
+          socket.emit("room:error", { error: "Trop de connexions pour ce joueur." });
+          socket.disconnect(true);
+          return;
+        }
 
-      if (presence.removalTimer) clearTimeout(presence.removalTimer);
-      presence.removalTimer = undefined;
-      presence.socketIds.add(socket.id);
-      presenceByPlayer.set(key, presence);
-      socket.data.presenceKey = key;
-      socket.join(code);
-      emitRoomPresence(code);
-
-      const unsubscribe = subscribeToRoomChanges(code, () => io.to(code).emit("room:changed"));
-      socket.once("disconnect", () => {
-        unsubscribe();
-        presence.socketIds.delete(socket.id);
-
-        if (presence.socketIds.size > 0) return;
-
+        if (presence.removalTimer) clearTimeout(presence.removalTimer);
+        presence.removalTimer = undefined;
+        presence.socketIds.add(socket.id);
+        presenceByPlayer.set(key, presence);
+        socket.data.presenceKey = key;
+        socket.data.roomCode = code;
+        socket.join(code);
+        addRoomSubscription(code);
         emitRoomPresence(code);
-        presence.removalTimer = setTimeout(() => {
+
+        socket.once("disconnect", () => {
+          presence.socketIds.delete(socket.id);
+          removeRoomSubscription(code);
+
           if (presence.socketIds.size > 0) return;
 
-          void removePlayer(code, playerId)
-            .then((removed) => {
-              presenceByPlayer.delete(key);
-              if (removed) notifyRoomChanged(code);
-              emitRoomPresence(code);
-            })
-            .catch((error: unknown) => {
-              console.error("Impossible de retirer le joueur déconnecté.", error);
-            });
-        }, DISCONNECTION_GRACE_PERIOD_MS);
-      });
+          emitRoomPresence(code);
+          presence.removalTimer = setTimeout(() => {
+            if (presence.socketIds.size > 0) return;
+
+            void removePlayer(code, player.id)
+              .then((removed) => {
+                presenceByPlayer.delete(key);
+                if (removed) notifyRoomChanged(code);
+                emitRoomPresence(code);
+              })
+              .catch((error: unknown) => {
+                console.error("Impossible de retirer le joueur déconnecté.", error);
+              });
+          }, DISCONNECTION_GRACE_PERIOD_MS);
+        });
+      } finally {
+        socket.data.watchPending = false;
+      }
     });
   });
 

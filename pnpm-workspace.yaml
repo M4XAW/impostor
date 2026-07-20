@@ -7,6 +7,8 @@ allowBuilds:
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+overrides:
+  postcss: 8.5.20
 minimumReleaseAgeExclude:
   - '@prisma/adapter-pg@7.9.0'
   - '@prisma/client-runtime-utils@7.9.0'

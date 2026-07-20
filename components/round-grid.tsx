@@ -2,10 +2,10 @@ import type { GameSnapshot } from "@/types/game";
 
 interface RoundGridProps {
     game: GameSnapshot;
-    connectedPlayerIds: string[] | null;
+    connectedPlayerPublicIds: string[] | null;
 }
 
-export function RoundGrid({ game, connectedPlayerIds }: RoundGridProps) {
+export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
     const rowMap = new Map<string, { wordNumber: number; roundNumber: number }>();
     game.clues.forEach((clue) => {
         rowMap.set(`${clue.wordNumber}-${clue.roundNumber}`, {
@@ -32,8 +32,8 @@ export function RoundGrid({ game, connectedPlayerIds }: RoundGridProps) {
             <div className="grid min-w-2xl grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
                 {game.players.map((player) => (
                     <article
-                        key={player.id}
-                        className={`overflow-hidden border bg-white/3 text-center transition-opacity ${connectedPlayerIds?.includes(player.id) === false ? "opacity-40" : ""}`}
+                        key={player.publicId}
+                        className={`overflow-hidden border bg-white/3 text-center transition-opacity ${connectedPlayerPublicIds?.includes(player.publicId) === false ? "opacity-40" : ""}`}
                     >
                         <div
                             className="grid h-14 place-items-center border-b text-3xl"
@@ -44,8 +44,8 @@ export function RoundGrid({ game, connectedPlayerIds }: RoundGridProps) {
 
                         <div className="border-b px-3 py-2 font-semibold">
                             {player.name}
-                            {player.id === game.currentPlayer.id ? " (toi)" : ""}
-                            {connectedPlayerIds?.includes(player.id) === false && (
+                            {player.isSelf ? " (toi)" : ""}
+                            {connectedPlayerPublicIds?.includes(player.publicId) === false && (
                                 <span className="sr-only"> — hors ligne</span>
                             )}
                         </div>
@@ -53,13 +53,13 @@ export function RoundGrid({ game, connectedPlayerIds }: RoundGridProps) {
                         {rounds.map((round) => {
                             const clue = game.clues.find(
                                 (item) =>
-                                    item.playerId === player.id &&
+                                    item.playerPublicId === player.publicId &&
                                     item.wordNumber === round.wordNumber &&
                                     item.roundNumber === round.roundNumber,
                             );
 
                             const isActive =
-                                game.turn?.currentPlayerId === player.id &&
+                                game.turn?.currentPlayerPublicId === player.publicId &&
                                 game.turn.wordNumber === round.wordNumber &&
                                 game.turn.roundNumber === round.roundNumber;
 
