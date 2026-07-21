@@ -540,40 +540,31 @@ export function RoomClient({ code }: RoomClientProps) {
 
                         {game.phase === "VOTING" && (
                             <ul className="mt-7 space-y-2">
-                                {game.players.map((player) => {
-                                    const latestClue = game.clues.findLast(
-                                        (clue) => clue.playerPublicId === player.publicId,
-                                    );
-
-                                    return (
-                                        <li
-                                            key={player.publicId}
-                                            className={`flex items-center gap-3 border px-4 py-3 transition-opacity ${isPlayerConnected(player.publicId) ? "" : "opacity-40"}`}
-                                        >
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate">
-                                                    {player.name}
-                                                    {player.isSelf ? " (toi)" : ""}
-                                                </p>
-                                                <p className="truncate text-sm text-muted-foreground">
-                                                    {latestClue?.content ?? "Aucun mot saisi"}
-                                                </p>
-                                            </div>
-                                            {!player.isSelf && (
-                                                <VoteConfirmationDialog
-                                                    disabled={hasCurrentPlayerVoted}
-                                                    playerName={player.name}
-                                                    onConfirm={() =>
-                                                        void play({
-                                                            action: "vote",
-                                                            targetPublicId: player.publicId,
-                                                        })
-                                                    }
-                                                />
-                                            )}
-                                        </li>
-                                    );
-                                })}
+                                {game.players.map((player) => (
+                                    <li
+                                        key={player.publicId}
+                                        className={`flex items-center gap-3 border px-4 py-3 transition-opacity ${isPlayerConnected(player.publicId) ? "" : "opacity-40"}`}
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate">
+                                                {player.name}
+                                                {player.isSelf ? " (toi)" : ""}
+                                            </p>
+                                        </div>
+                                        {!player.isSelf && (
+                                            <VoteConfirmationDialog
+                                                disabled={hasCurrentPlayerVoted}
+                                                playerName={player.name}
+                                                onConfirm={() =>
+                                                    void play({
+                                                        action: "vote",
+                                                        targetPublicId: player.publicId,
+                                                    })
+                                                }
+                                            />
+                                        )}
+                                    </li>
+                                ))}
                             </ul>
                         )}
 
@@ -650,7 +641,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                                 <p>
                                                     {connectedPlayerPublicIds === null
                                                         ? "Vérification des joueurs connectés…"
-                                                        : `Il manque ${3 - connectedPlayerCount} joueur${connectedPlayerCount === 2 ? "" : "s"} connecté${connectedPlayerCount === 2 ? "" : "s"} pour commencer`}
+                                                        : `Il manque ${3 - connectedPlayerCount} joueur${connectedPlayerCount === 2 ? "" : "s"} pour commencer`}
                                                 </p>
                                             </TooltipContent>
                                         </Tooltip>

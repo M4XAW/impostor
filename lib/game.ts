@@ -1,5 +1,6 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { PlayerRole, Prisma, RoomPhase } from "@/generated/prisma/client";
+import { selectVisibleWordItems } from "@/lib/current-word";
 import { PublicError } from "@/lib/errors";
 import { shouldPreservePlayerAfterDeparture } from "@/lib/player-departure";
 import { hasMinimumConnectedPlayers } from "@/lib/player-presence";
@@ -410,6 +411,8 @@ async function advanceTurnWithClient(
   });
 
   if (nextTurn.phase === "VOTING") {
+    await client.vote.deleteMany({ where: { roomId: room.id } });
+
     const updatedRoom = await client.room.update({
       where: { id: room.id },
       data: { phase: RoomPhase.VOTING, turnEndsAt: null },
@@ -497,6 +500,7 @@ export async function beginVote(code: string, playerId: string) {
       throw new PublicError("Terminez au moins un tour complet avant le vote.", 409);
     }
 
+    await transaction.vote.deleteMany({ where: { roomId: room.id } });
     await transaction.room.update({
       where: { id: room.id },
       data: { phase: RoomPhase.VOTING, turnEndsAt: null },
@@ -606,6 +610,13 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
 
   const currentTurnPlayer = room.players[room.currentPlayerIndex];
   const currentWord = room.words.find((word) => word.wordNumber === room.wordNumber);
+  const showAllWords = room.phase === RoomPhase.RESULTS &&
+    (!room.winner || room.wordNumber >= room.wordCount);
+  const visibleClues = selectVisibleWordItems(
+    room.clues,
+    room.wordNumber,
+    showAllWords,
+  );
 
   return {
     code: room.code,
@@ -641,7 +652,7 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
           ? currentWord?.impostorWord
           : currentWord?.civilianWord,
     },
-    clues: room.clues.map((clue) => ({
+    clues: visibleClues.map((clue) => ({
       playerPublicId: clue.player.publicId,
       content: clue.content,
       playerName: clue.player.name,

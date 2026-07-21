@@ -1,5 +1,7 @@
 import type { GameSnapshot } from "@/types/game";
+import { buildRoundRows } from "@/lib/round-rows";
 import { AvatarCircle } from "pixelarticons/react/AvatarCircle";
+import { Fragment } from "react";
 
 interface RoundGridProps {
     game: GameSnapshot;
@@ -7,90 +9,110 @@ interface RoundGridProps {
 }
 
 export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
-    const rowMap = new Map<string, { wordNumber: number; roundNumber: number }>();
-    game.clues.forEach((clue) => {
-        rowMap.set(`${clue.wordNumber}-${clue.roundNumber}`, {
-            wordNumber: clue.wordNumber,
-            roundNumber: clue.roundNumber,
-        });
-    });
-
-    if (game.turn) {
-        rowMap.set(`${game.turn.wordNumber}-${game.turn.roundNumber}`, {
-            wordNumber: game.turn.wordNumber,
-            roundNumber: game.turn.roundNumber,
-        });
-    }
-
-    if (game.phase === "RESULTS" && game.result) {
-        for (let roundNumber = 1; roundNumber <= game.settings.roundCount; roundNumber += 1) {
-            rowMap.set(`${game.result.wordNumber}-${roundNumber}`, {
-                wordNumber: game.result.wordNumber,
-                roundNumber,
-            });
-        }
-    }
-
-    const rounds = [...rowMap.values()].sort(
-        (first, second) =>
-            first.wordNumber - second.wordNumber ||
-            first.roundNumber - second.roundNumber,
+    const showAllWords = game.phase === "RESULTS" && (
+        game.endReason === "NOT_ENOUGH_PLAYERS" ||
+        game.result?.wordNumber === game.settings.wordCount
     );
+    const rounds = buildRoundRows({
+        clues: game.clues,
+        phase: game.phase,
+        roundCount: game.settings.roundCount,
+        showAllWords,
+        turn: game.turn,
+        resultWordNumber: game.result?.wordNumber,
+    });
 
     return (
         <section className="mt-7 overflow-x-auto">
-            <div className="grid min-w-2xl grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-3">
-                {game.players.map((player) => (
-                    <article
-                        key={player.publicId}
-                        className={`overflow-hidden border bg-white/3 transition-opacity ${connectedPlayerPublicIds?.includes(player.publicId) === false ? "opacity-40" : ""}`}
-                    >
-                        <div className="flex justify-between items-center gap-1 border-b px-3 py-3">
-                            <div className="flex items-center gap-2">
-                                <AvatarCircle />
-                                {player.name}
-                                {player.isSelf ? " (toi)" : ""}
-                            </div>
-                            {connectedPlayerPublicIds?.includes(player.publicId) === false && (
-                                <span className="text-sm text-muted-foreground">
-                                    {`[DÉCONNECTÉ]`}
-                                </span>
-                            )}
-                        </div>
-
-                        {rounds.map((round) => {
-                            const clue = game.clues.find(
-                                (item) =>
-                                    item.playerPublicId === player.publicId &&
-                                    item.wordNumber === round.wordNumber &&
-                                    item.roundNumber === round.roundNumber,
-                            );
-
-                            const isActive =
-                                game.turn?.currentPlayerPublicId === player.publicId &&
-                                game.turn.wordNumber === round.wordNumber &&
-                                game.turn.roundNumber === round.roundNumber;
-
-                            return (
-                                <div
-                                    key={`${round.wordNumber}-${round.roundNumber}`}
-                                    className={`min-h-12 border-b px-3 py-3 last:border-b-0 ${isActive ? "bg-orange-400/10 text-orange-300" : ""}`}
-                                >
-                                    {clue?.content ?? (
-                                        isActive
-                                            ? player.isSelf
-                                                ? "À ton tour"
-                                                : "En train de jouer"
-                                            : game.phase === "RESULTS"
-                                                ? "Aucun mot saisi"
-                                                : "—"
+            <table className="w-full min-w-max border-separate border-spacing-0 text-left">
+                <caption className="sr-only">Récapitulatif des mots saisis</caption>
+                <thead>
+                    <tr>
+                        <th
+                            scope="col"
+                            className="min-w-28 border bg-muted/20 px-3 py-3 font-medium"
+                        >
+                            Tour
+                        </th>
+                        {game.players.map((player) => (
+                            <th
+                                key={player.publicId}
+                                scope="col"
+                                className={`min-w-36 border-y border-r bg-white/3 px-3 py-3 font-normal transition-opacity ${connectedPlayerPublicIds?.includes(player.publicId) === false ? "opacity-40" : ""}`}
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="flex items-center gap-2">
+                                        <AvatarCircle />
+                                        {player.name}
+                                        {player.isSelf ? " (toi)" : ""}
+                                    </span>
+                                    {connectedPlayerPublicIds?.includes(player.publicId) === false && (
+                                        <span className="text-sm text-muted-foreground">
+                                            [DÉCONNECTÉ]
+                                        </span>
                                     )}
                                 </div>
-                            );
-                        })}
-                    </article>
-                ))}
-            </div>
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {rounds.map((round, index) => (
+                        <Fragment key={`${round.wordNumber}-${round.roundNumber}`}>
+                            {showAllWords && rounds[index - 1]?.wordNumber !== round.wordNumber && (
+                                <tr>
+                                    <th
+                                        colSpan={game.players.length + 1}
+                                        className="border-x border-b bg-muted px-3 py-2 font-medium"
+                                    >
+                                        Manche {round.wordNumber}
+                                    </th>
+                                </tr>
+                            )}
+                            <tr>
+                                <th
+                                    scope="row"
+                                    className="border-x border-b bg-muted/20 px-3 py-2 font-normal"
+                                >
+                                    <span className="block text-xs text-muted-foreground">
+                                        Tour {round.roundNumber}
+                                    </span>
+                                </th>
+                                {game.players.map((player) => {
+                                    const clue = game.clues.find(
+                                        (item) =>
+                                            item.playerPublicId === player.publicId &&
+                                            item.wordNumber === round.wordNumber &&
+                                            item.roundNumber === round.roundNumber,
+                                    );
+
+                                    const isActive =
+                                        game.turn?.currentPlayerPublicId === player.publicId &&
+                                        game.turn.wordNumber === round.wordNumber &&
+                                        game.turn.roundNumber === round.roundNumber;
+
+                                    return (
+                                        <td
+                                            key={player.publicId}
+                                            className={`min-w-36 border-r border-b px-3 py-3 transition-opacity ${isActive ? "bg-orange-400/10 text-orange-300" : ""} ${connectedPlayerPublicIds?.includes(player.publicId) === false ? "opacity-40" : ""}`}
+                                        >
+                                            {clue?.content ?? (
+                                                isActive
+                                                    ? player.isSelf
+                                                        ? "À ton tour"
+                                                        : "En train de jouer"
+                                                    : game.phase === "VOTING" || game.phase === "RESULTS"
+                                                        ? "Aucun mot saisi"
+                                                        : "—"
+                                            )}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        </Fragment>
+                    ))}
+                </tbody>
+            </table>
         </section>
     );
 }
