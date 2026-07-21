@@ -22,6 +22,15 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
         });
     }
 
+    if (game.phase === "RESULTS" && game.result) {
+        for (let roundNumber = 1; roundNumber <= game.settings.roundCount; roundNumber += 1) {
+            rowMap.set(`${game.result.wordNumber}-${roundNumber}`, {
+                wordNumber: game.result.wordNumber,
+                roundNumber,
+            });
+        }
+    }
+
     const rounds = [...rowMap.values()].sort(
         (first, second) =>
             first.wordNumber - second.wordNumber ||
@@ -67,7 +76,15 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                                     key={`${round.wordNumber}-${round.roundNumber}`}
                                     className={`min-h-12 border-b px-3 py-3 last:border-b-0 ${isActive ? "bg-orange-400/10 text-orange-300" : ""}`}
                                 >
-                                    {clue?.content ?? (isActive ? "À jouer" : "—")}
+                                    {clue?.content ?? (
+                                        isActive
+                                            ? player.isSelf
+                                                ? "À ton tour"
+                                                : "En train de jouer"
+                                            : game.phase === "RESULTS"
+                                                ? "Aucun mot saisi"
+                                                : "—"
+                                    )}
                                 </div>
                             );
                         })}
