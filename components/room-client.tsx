@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { FullScreenLoader } from "@/components/full-screen-loader";
+import { GameRulesDialog } from "@/components/game-rules-dialog";
 import { RoundGrid } from "@/components/round-grid";
 import { TransferHostContextMenu } from "@/components/transfer-host-context-menu";
 import { VoteConfirmationDialog } from "@/components/vote-confirmation-dialog";
@@ -284,7 +285,7 @@ export function RoomClient({ code }: RoomClientProps) {
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
                 <Card className="flex-1">
                     <CardContent>
-                        <div className="flex items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center justify-between gap-4">
                             <div className="flex items-center gap-2">
                                 <p className="text-sm uppercase tracking-widest text-orange-300">
                                     {game.phase === "LOBBY" ? "Salon" :
@@ -293,15 +294,18 @@ export function RoomClient({ code }: RoomClientProps) {
                                 </p>
                                 <Badge variant="secondary">{game.code}</Badge>
                             </div>
-                            <Button
-                                type="button"
-                                variant="destructive"
-                                size="sm"
-                                disabled={isLeaving}
-                                onClick={() => void leaveRoom()}
-                            >
-                                {isLeaving ? <Loader className="animate-spin" /> : "Quitter"}
-                            </Button>
+                            <div className="flex shrink-0 items-center gap-2">
+                                <GameRulesDialog />
+                                <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="sm"
+                                    disabled={isLeaving}
+                                    onClick={() => void leaveRoom()}
+                                >
+                                    {isLeaving ? <Loader className="animate-spin" /> : "Quitter"}
+                                </Button>
+                            </div>
                         </div>
 
                         <h1 className="mt-2 text-3xl">

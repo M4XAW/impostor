@@ -18,8 +18,8 @@ export interface RoomSettings {
   impostorCount: number;
 }
 
-function isHost(players: Array<{ id: string; isHost: boolean }>, playerId: string) {
-  return players.some((player) => player.id === playerId && player.isHost);
+function isHost(room: { hostId: string | null }, playerId: string) {
+  return room.hostId === playerId;
 }
 
 function playerSessionData(credential: PlayerSessionCredential) {
@@ -116,10 +116,10 @@ async function pruneStaleLobbyPlayers(code: string) {
       where: { id: { in: [...stalePlayerIds] }, roomId: room.id },
     });
 
-    if (stalePlayers.some((player) => player.isHost)) {
-      await transaction.player.update({
-        where: { id: remainingPlayers[0].id },
-        data: { isHost: true },
+    if (room.hostId && stalePlayerIds.has(room.hostId)) {
+      await transaction.room.update({
+        where: { id: room.id },
+        data: { hostId: remainingPlayers[0].id },
       });
     }
 
@@ -132,18 +132,23 @@ export async function createRoom(name: string, credential: PlayerSessionCredenti
 
   for (let attempt = 0; attempt < MAX_ROOM_CODE_ATTEMPTS; attempt += 1) {
     try {
-      return await prisma.room.create({
-        data: {
-          code: createRoomCode(),
-          players: {
-            create: {
-              name,
-              isHost: true,
-              ...playerSessionData(credential),
-            },
+      return await runSerializable(async (transaction) => {
+        const room = await transaction.room.create({
+          data: { code: createRoomCode() },
+        });
+        const host = await transaction.player.create({
+          data: {
+            roomId: room.id,
+            name,
+            ...playerSessionData(credential),
           },
-        },
-        include: { players: true },
+        });
+
+        return transaction.room.update({
+          where: { id: room.id },
+          data: { hostId: host.id },
+          include: { players: true },
+        });
       });
     } catch (error) {
       const isUniqueCollision =
@@ -201,10 +206,10 @@ export async function removePlayer(code: string, playerId: string) {
 
     await transaction.player.delete({ where: { id: playerId } });
 
-    if (departingPlayer.isHost) {
-      await transaction.player.update({
-        where: { id: remainingPlayers[0].id },
-        data: { isHost: true },
+    if (room.hostId === departingPlayer.id) {
+      await transaction.room.update({
+        where: { id: room.id },
+        data: { hostId: remainingPlayers[0].id },
       });
     }
 
@@ -248,7 +253,7 @@ export async function updateSettings(code: string, playerId: string, settings: R
       include: { players: true },
     });
 
-    if (!room || !isHost(room.players, playerId) || room.phase !== RoomPhase.LOBBY) {
+    if (!room || !isHost(room, playerId) || room.phase !== RoomPhase.LOBBY) {
       throw new PublicError("Seul l'hôte peut modifier les paramètres avant le départ.", 403);
     }
 
@@ -267,7 +272,7 @@ export async function transferHost(code: string, currentHostId: string, targetPl
       throw new PublicError("L’hôte peut être transféré uniquement avant le début de la partie.", 409);
     }
 
-    if (!isHost(room.players, currentHostId)) {
+    if (!isHost(room, currentHostId)) {
       throw new PublicError("Seul l’hôte actuel peut transférer ce rôle.", 403);
     }
 
@@ -275,17 +280,12 @@ export async function transferHost(code: string, currentHostId: string, targetPl
     if (!targetPlayer) throw new PublicError("Le nouvel hôte doit être un joueur de ce salon.");
     if (currentHostId === targetPlayer.id) throw new PublicError("Tu es déjà l’hôte de ce salon.");
 
-    const updatedHost = await transaction.player.updateMany({
-      where: { id: currentHostId, roomId: room.id, isHost: true },
-      data: { isHost: false },
+    const updatedRoom = await transaction.room.updateMany({
+      where: { id: room.id, hostId: currentHostId },
+      data: { hostId: targetPlayer.id },
     });
 
-    if (updatedHost.count !== 1) throw new PublicError("Le rôle d’hôte a déjà été transféré.", 409);
-
-    await transaction.player.update({
-      where: { id: targetPlayer.id },
-      data: { isHost: true },
-    });
+    if (updatedRoom.count !== 1) throw new PublicError("Le rôle d’hôte a déjà été transféré.", 409);
   });
 }
 
@@ -299,7 +299,7 @@ export async function kickPlayer(code: string, hostId: string, targetPlayerPubli
     if (!room || room.phase !== RoomPhase.LOBBY) {
       throw new PublicError("Un joueur peut être retiré uniquement avant le début de la partie.", 409);
     }
-    if (!isHost(room.players, hostId)) {
+    if (!isHost(room, hostId)) {
       throw new PublicError("Seul l’hôte peut retirer un joueur du salon.", 403);
     }
 
@@ -318,7 +318,7 @@ export async function startGame(code: string, playerId: string) {
       include: { players: { orderBy: { createdAt: "asc" } } },
     });
 
-    if (!room || !isHost(room.players, playerId)) throw new PublicError("Action non autorisée.", 403);
+    if (!room || !isHost(room, playerId)) throw new PublicError("Action non autorisée.", 403);
     if (room.phase !== RoomPhase.LOBBY || room.players.length < 3) {
       throw new PublicError("Il faut au moins trois joueurs pour démarrer.", 409);
     }
@@ -480,7 +480,7 @@ export async function submitClue(code: string, playerId: string, content: string
 export async function beginVote(code: string, playerId: string) {
   await runSerializable(async (transaction) => {
     const { room } = await advanceTurnWithClient(transaction, code);
-    if (!room || !isHost(room.players, playerId)) throw new PublicError("Action non autorisée.", 403);
+    if (!room || !isHost(room, playerId)) throw new PublicError("Action non autorisée.", 403);
     if (room.phase !== RoomPhase.DISCUSSION || room.roundNumber === 1 && room.wordNumber === 1) {
       throw new PublicError("Terminez au moins un tour complet avant le vote.", 409);
     }
@@ -582,12 +582,12 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
       publicId: player.publicId,
       name: player.name,
       isSelf: player.id === currentPlayer.id,
-      isHost: player.isHost,
+      isHost: player.id === room.hostId,
       hasVoted: room.votes.some((vote) => vote.voterId === player.id),
     })),
     currentPlayer: {
       name: currentPlayer.name,
-      isHost: currentPlayer.isHost,
+      isHost: currentPlayer.id === room.hostId,
       word: room.phase === RoomPhase.LOBBY
         ? undefined
         : currentPlayer.role === PlayerRole.IMPOSTOR

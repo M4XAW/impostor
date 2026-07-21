@@ -36,12 +36,16 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                         key={player.publicId}
                         className={`overflow-hidden border bg-white/3 transition-opacity ${connectedPlayerPublicIds?.includes(player.publicId) === false ? "opacity-40" : ""}`}
                     >
-                        <div className="flex items-center gap-1 border-b px-3 py-3">
-                            <AvatarCircle />
-                            {player.name}
-                            {player.isSelf ? " (toi)" : ""}
+                        <div className="flex justify-between items-center gap-1 border-b px-3 py-3">
+                            <div className="flex items-center gap-2">
+                                <AvatarCircle />
+                                {player.name}
+                                {player.isSelf ? " (toi)" : ""}
+                            </div>
                             {connectedPlayerPublicIds?.includes(player.publicId) === false && (
-                                <span className="sr-only"> — hors ligne</span>
+                                <span className="text-sm text-muted-foreground">
+                                    {`[DÉCONNECTÉ]`}
+                                </span>
                             )}
                         </div>
 

@@ -23,7 +23,7 @@ model Room {
   id                 String     @id @default(cuid())
   code               String     @unique
   phase              RoomPhase  @default(LOBBY)
-  hostId             String?
+  hostId             String?    @unique
   wordCount          Int        @default(10)
   roundCount         Int        @default(3)
   turnSeconds        Int        @default(30)
@@ -35,7 +35,8 @@ model Room {
   winner             String?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
-  players            Player[]
+  host               Player?    @relation("RoomHost", fields: [hostId], references: [id], onDelete: SetNull)
+  players            Player[]   @relation("RoomPlayers")
   votes              Vote[]
   clues              Clue[]
   words              RoomWord[]
@@ -91,24 +92,24 @@ model Clue {
 }
 
 model Player {
-  id                 String     @id @default(cuid())
-  publicId           String     @default(uuid())
-  sessionTokenHash   String     @unique
-  sessionExpiresAt   DateTime
-  lastSeenAt         DateTime   @default(now())
-  name               String
-  role               PlayerRole @default(CIVILIAN)
-  isHost             Boolean    @default(false)
-  createdAt          DateTime   @default(now())
-  roomId             String
-  room               Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  votes              Vote[]     @relation("Voter")
-  received           Vote[]     @relation("Target")
-  clues              Clue[]
+  id               String     @id @default(cuid())
+  publicId         String     @default(uuid())
+  sessionTokenHash String     @unique
+  sessionExpiresAt DateTime
+  lastSeenAt       DateTime   @default(now())
+  name             String
+  role             PlayerRole @default(CIVILIAN)
+  createdAt        DateTime   @default(now())
+  roomId           String
+  room             Room       @relation("RoomPlayers", fields: [roomId], references: [id], onDelete: Cascade)
+  hostedRoom       Room?      @relation("RoomHost")
+  votes            Vote[]     @relation("Voter")
+  received         Vote[]     @relation("Target")
+  clues            Clue[]
 
+  @@unique([roomId, publicId])
   @@index([roomId])
   @@index([lastSeenAt])
-  @@unique([roomId, publicId])
 }
 
 model Vote {
