@@ -8,6 +8,7 @@ import {
   kickPlayer,
   removePlayer,
   startGame,
+  startNextWord,
   submitClue,
   transferHost,
   updateSettings,
@@ -25,6 +26,7 @@ import type { GameSnapshot } from "@/types/game";
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("start") }),
+  z.object({ action: z.literal("nextWord") }),
   z.object({ action: z.literal("beginVote") }),
   z.object({ action: z.literal("vote"), targetPublicId: z.string().uuid() }),
   z.object({ action: z.literal("transferHost"), targetPlayerPublicId: z.string().uuid() }),
@@ -104,6 +106,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
     let removedPlayerPublicId: string | undefined;
 
     if (parsed.data.action === "start") await startGame(code, player.id);
+    if (parsed.data.action === "nextWord") await startNextWord(code, player.id);
     if (parsed.data.action === "beginVote") await beginVote(code, player.id);
     if (parsed.data.action === "vote") {
       await castVote(code, player.id, parsed.data.targetPublicId);

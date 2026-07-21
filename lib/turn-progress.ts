@@ -4,7 +4,6 @@ interface TurnProgressInput {
   roundNumber: number;
   roundCount: number;
   wordNumber: number;
-  wordCount: number;
 }
 
 export type NextTurnProgress =
@@ -22,7 +21,6 @@ export function getNextTurnProgress({
   roundNumber,
   roundCount,
   wordNumber,
-  wordCount,
 }: TurnProgressInput): NextTurnProgress {
   const isLastPlayer = currentPlayerIndex + 1 >= playerCount;
 
@@ -46,14 +44,5 @@ export function getNextTurnProgress({
     };
   }
 
-  if (wordNumber >= wordCount) {
-    return { phase: "VOTING" };
-  }
-
-  return {
-    phase: "DISCUSSION",
-    currentPlayerIndex: 0,
-    roundNumber: 1,
-    wordNumber: wordNumber + 1,
-  };
+  return { phase: "VOTING" };
 }

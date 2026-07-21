@@ -198,7 +198,9 @@ export async function removePlayer(code: string, playerId: string) {
     const departingPlayerIndex = room?.players.findIndex((player) => player.id === playerId) ?? -1;
 
     if (!room || departingPlayerIndex < 0) return false;
-    if (shouldPreservePlayerAfterDeparture(room.phase)) return false;
+    if (shouldPreservePlayerAfterDeparture(room.phase, room.wordNumber >= room.wordCount)) {
+      return false;
+    }
 
     const departingPlayer = room.players[departingPlayerIndex];
     const remainingPlayers = room.players.filter((player) => player.id !== playerId);
@@ -401,7 +403,6 @@ async function advanceTurnWithClient(
     roundNumber: room.roundNumber,
     roundCount: room.roundCount,
     wordNumber: room.wordNumber,
-    wordCount: room.wordCount,
   });
 
   if (nextTurn.phase === "VOTING") {
@@ -488,13 +489,48 @@ export async function beginVote(code: string, playerId: string) {
   await runSerializable(async (transaction) => {
     const { room } = await advanceTurnWithClient(transaction, code);
     if (!room || !isHost(room, playerId)) throw new PublicError("Action non autorisée.", 403);
-    if (room.phase !== RoomPhase.DISCUSSION || room.roundNumber === 1 && room.wordNumber === 1) {
+    if (room.phase !== RoomPhase.DISCUSSION || room.roundNumber === 1) {
       throw new PublicError("Terminez au moins un tour complet avant le vote.", 409);
     }
 
     await transaction.room.update({
       where: { id: room.id },
       data: { phase: RoomPhase.VOTING, turnEndsAt: null },
+    });
+  });
+}
+
+export async function startNextWord(code: string, playerId: string) {
+  await runSerializable(async (transaction) => {
+    const room = await transaction.room.findUnique({
+      where: { code },
+      include: { players: { orderBy: { createdAt: "asc" } } },
+    });
+
+    if (!room || !isHost(room, playerId)) {
+      throw new PublicError("Action non autorisée.", 403);
+    }
+    if (room.phase !== RoomPhase.RESULTS || !room.winner) {
+      throw new PublicError("Terminez la manche en cours avant de continuer.", 409);
+    }
+    if (room.wordNumber >= room.wordCount) {
+      throw new PublicError("Toutes les manches sont terminées.", 409);
+    }
+    if (room.players.length < 3) {
+      throw new PublicError("Il faut au moins trois joueurs pour continuer.", 409);
+    }
+
+    await transaction.vote.deleteMany({ where: { roomId: room.id } });
+    await transaction.room.update({
+      where: { id: room.id },
+      data: {
+        phase: RoomPhase.DISCUSSION,
+        winner: null,
+        wordNumber: room.wordNumber + 1,
+        roundNumber: 1,
+        currentPlayerIndex: 0,
+        turnEndsAt: new Date(Date.now() + room.turnSeconds * 1000),
+      },
     });
   });
 }
@@ -582,7 +618,7 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
           roundNumber: room.roundNumber,
           currentPlayerPublicId: currentTurnPlayer.publicId,
           endsAt: room.turnEndsAt.toISOString(),
-          canStartVote: room.roundNumber > 1 || room.wordNumber > 1,
+          canStartVote: room.roundNumber > 1,
         }
       : undefined,
     players: room.players.map((player) => ({
@@ -617,6 +653,7 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
     winner: room.winner === "CIVILIANS" || room.winner === "IMPOSTOR" ? room.winner : undefined,
     result: room.phase === RoomPhase.RESULTS && currentWord && room.winner
       ? {
+          wordNumber: room.wordNumber,
           impostorNames: room.players
             .filter((player) => player.role === PlayerRole.IMPOSTOR)
             .map((player) => player.name),

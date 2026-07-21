@@ -23,6 +23,7 @@ export interface GameState {
   votes: Array<{ voterPublicId: string; voterName: string; targetPublicId: string; targetName: string }>;
   winner?: "CIVILIANS" | "IMPOSTOR";
   result?: {
+    wordNumber: number;
     impostorNames: string[];
     civilianWord: string;
     impostorWord: string;

@@ -69,7 +69,8 @@ export function GameRulesDialog() {
         <p className="border-l-2 border-orange-400 bg-orange-400/10 px-4 py-3 text-orange-300">
           Après un tour complet, l’hôte peut ouvrir le vote à tout moment.
           Sans intervention de sa part, le vote s’ouvre automatiquement une
-          fois tous les mots et tous les tours configurés terminés.
+          fois les tours configurés pour le mot terminés. Les résultats de la
+          manche s’affichent avant que l’hôte lance la suivante.
         </p>
       </DialogContent>
     </Dialog>

@@ -10,7 +10,6 @@ test("the turn moves to the next player during a round", () => {
       roundNumber: 1,
       roundCount: 2,
       wordNumber: 1,
-      wordCount: 2,
     }),
     {
       phase: "DISCUSSION",
@@ -29,7 +28,6 @@ test("the last player starts the next configured round", () => {
       roundNumber: 1,
       roundCount: 2,
       wordNumber: 1,
-      wordCount: 2,
     }),
     {
       phase: "DISCUSSION",
@@ -40,7 +38,7 @@ test("the last player starts the next configured round", () => {
   );
 });
 
-test("the next word starts after all its configured rounds", () => {
+test("voting starts after all configured rounds even when more words remain", () => {
   assert.deepEqual(
     getNextTurnProgress({
       currentPlayerIndex: 2,
@@ -48,14 +46,8 @@ test("the next word starts after all its configured rounds", () => {
       roundNumber: 2,
       roundCount: 2,
       wordNumber: 1,
-      wordCount: 2,
     }),
-    {
-      phase: "DISCUSSION",
-      currentPlayerIndex: 0,
-      roundNumber: 1,
-      wordNumber: 2,
-    },
+    { phase: "VOTING" },
   );
 });
 
@@ -79,20 +71,17 @@ test("the same word remains active throughout three configured rounds", () => {
       roundNumber: currentTurn.roundNumber,
       roundCount,
       wordNumber: currentTurn.wordNumber,
-      wordCount: 2,
     });
 
-    assert.equal(nextTurn.phase, "DISCUSSION");
-    if (nextTurn.phase === "DISCUSSION") currentTurn = nextTurn;
+    if (turnNumber < playerCount * roundCount - 1) {
+      assert.equal(nextTurn.phase, "DISCUSSION");
+      if (nextTurn.phase === "DISCUSSION") currentTurn = nextTurn;
+    } else {
+      assert.deepEqual(nextTurn, { phase: "VOTING" });
+    }
   }
 
   assert.deepEqual(activeWordNumbers, Array<number>(9).fill(1));
-  assert.deepEqual(currentTurn, {
-    phase: "DISCUSSION",
-    currentPlayerIndex: 0,
-    roundNumber: 1,
-    wordNumber: 2,
-  });
 });
 
 test("voting starts after the final configured turn", () => {
@@ -103,7 +92,6 @@ test("voting starts after the final configured turn", () => {
       roundNumber: 2,
       roundCount: 2,
       wordNumber: 2,
-      wordCount: 2,
     }),
     { phase: "VOTING" },
   );

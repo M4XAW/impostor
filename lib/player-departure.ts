@@ -1,5 +1,8 @@
 import type { GamePhase } from "@/types/game";
 
-export function shouldPreservePlayerAfterDeparture(phase: GamePhase) {
-  return phase === "RESULTS";
+export function shouldPreservePlayerAfterDeparture(
+  phase: GamePhase,
+  isFinalMatch: boolean,
+) {
+  return phase === "RESULTS" && isFinalMatch;
 }

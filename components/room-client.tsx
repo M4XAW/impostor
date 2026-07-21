@@ -55,7 +55,7 @@ const settingFields: Array<{
     min: number;
     max: number;
 }> = [
-        { name: "wordCount", label: "Nombre de mots", min: 1, max: 20 },
+        { name: "wordCount", label: "Nombre de manches", min: 1, max: 20 },
         { name: "roundCount", label: "Tours par mot", min: 1, max: 10 },
         { name: "turnSeconds", label: "Secondes par tour", min: 10, max: 120 },
         { name: "impostorCount", label: "Imposteurs", min: 1, max: 3 },
@@ -298,6 +298,10 @@ export function RoomClient({ code }: RoomClientProps) {
     const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerPublicId === selfPlayer?.publicId;
     const canStartGame = game.phase === "LOBBY" && isHost;
     const canBeginVote = game.phase === "DISCUSSION" && isHost && game.turn?.canStartVote === true;
+    const hasNextWord = game.phase === "RESULTS" &&
+        game.result !== undefined &&
+        game.result.wordNumber < game.settings.wordCount;
+    const canStartNextWord = hasNextWord && isHost;
     const hasCurrentPlayerVoted = game.players.some(
         (player) => player.isSelf && player.hasVoted,
     );
@@ -313,7 +317,10 @@ export function RoomClient({ code }: RoomClientProps) {
                                 <p className="text-sm uppercase tracking-widest text-orange-300">
                                     {game.phase === "LOBBY" ? "Salon" :
                                         game.phase === "DISCUSSION" ? "Tour en cours"
-                                            : game.phase === "VOTING" ? "Vote" : "Résultats"}
+                                            : game.phase === "VOTING" ? "Vote"
+                                                : game.result
+                                                    ? `Résultats · manche ${game.result.wordNumber}/${game.settings.wordCount}`
+                                                    : "Résultats"}
                                 </p>
                                 <Badge variant="secondary">{game.code}</Badge>
                             </div>
@@ -340,8 +347,10 @@ export function RoomClient({ code }: RoomClientProps) {
                                         ? game.endReason === "NOT_ENOUGH_PLAYERS"
                                             ? "Partie terminée"
                                             : game.winner === "CIVILIANS"
-                                                ? "Les civils gagnent"
-                                                : "L’imposteur gagne"
+                                                ? "Les civils gagnent la manche"
+                                                : game.settings.impostorCount > 1
+                                                    ? "Les imposteurs gagnent la manche"
+                                                    : "L’imposteur gagne la manche"
                                         : "Qui est l’imposteur ?"}
                         </h1>
 
@@ -372,6 +381,16 @@ export function RoomClient({ code }: RoomClientProps) {
                                     </div>
                                 </dl>
                                 <VoteResults results={game.result.voteResults} />
+                                {hasNextWord && !isHost && (
+                                    <p className="mt-4 text-sm text-muted-foreground" role="status">
+                                        En attente de l’hôte pour lancer la manche suivante.
+                                    </p>
+                                )}
+                                {!hasNextWord && (
+                                    <p className="mt-4 text-sm text-muted-foreground" role="status">
+                                        Toutes les manches sont terminées.
+                                    </p>
+                                )}
                             </>
                         )}
 
@@ -389,7 +408,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                         {canSubmitClue ? " — c’est toi" : ""}
                                     </p>
                                     <p className="mt-1 text-sm text-foreground">
-                                        Mot {game.turn.wordNumber}/{game.settings.wordCount} · tour {game.turn.roundNumber}/{game.settings.roundCount}
+                                        Manche {game.turn.wordNumber}/{game.settings.wordCount} · tour {game.turn.roundNumber}/{game.settings.roundCount}
                                     </p>
                                 </div>
                                 <strong className="text-3xl tabular-nums text-orange-300">
@@ -572,13 +591,17 @@ export function RoomClient({ code }: RoomClientProps) {
                             <p className="mt-4 text-sm text-rose-300" role="alert">{error}</p>
                         )}
                     </CardContent>
-                    {canBeginVote && (
+                    {(canBeginVote || canStartNextWord) && (
                         <CardFooter>
-                            {canBeginVote && (
+                            {canBeginVote ? (
                                 <Button
                                     onClick={() => void play({ action: "beginVote" })}
                                 >
                                     Passer au vote
+                                </Button>
+                            ) : (
+                                <Button onClick={() => void play({ action: "nextWord" })}>
+                                    Lancer la manche suivante
                                 </Button>
                             )}
                         </CardFooter>
