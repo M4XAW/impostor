@@ -66,9 +66,10 @@ export function GameRulesDialog() {
           ))}
         </ol>
 
-        <p className="border-l-2 border-orange-400 bg-orange-400/10 px-4 py-3 text-muted-foreground">
-          L’hôte peut ouvrir le vote après un tour complet. Sinon, il démarre
-          automatiquement à la fin des mots et des tours configurés.
+        <p className="border-l-2 border-orange-400 bg-orange-400/10 px-4 py-3 text-orange-300">
+          Après un tour complet, l’hôte peut ouvrir le vote à tout moment.
+          Sans intervention de sa part, le vote s’ouvre automatiquement une
+          fois tous les mots et tous les tours configurés terminés.
         </p>
       </DialogContent>
     </Dialog>

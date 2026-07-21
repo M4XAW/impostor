@@ -358,7 +358,6 @@ export function RoomClient({ code }: RoomClientProps) {
                         {game.phase === "DISCUSSION" && game.turn && (
                             <div className="mt-5 flex items-center justify-between border border-orange-400/20 bg-orange-400/10 p-4">
                                 <div>
-                                    <p className="text-sm text-orange-300">À jouer maintenant</p>
                                     <p>
                                         {currentTurnPlayer?.name}
                                         {canSubmitClue ? " — c’est toi" : ""}
@@ -537,29 +536,8 @@ export function RoomClient({ code }: RoomClientProps) {
                             <p className="mt-4 text-sm text-rose-300" role="alert">{error}</p>
                         )}
                     </CardContent>
-                    {(canStartGame || canBeginVote) && (
+                    {canBeginVote && (
                         <CardFooter>
-                            {canStartGame && (
-                                game.players.length >= 3 ? (
-                                    <Button onClick={() => void play({ action: "start" })}>
-                                        Lancer la partie
-                                    </Button>
-                                ) : (
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span className="inline-block w-fit">
-                                                <Button disabled>
-                                                    Lancer la partie
-                                                </Button>
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="bottom">
-                                            <p>Il manque {3 - game.players.length} joueur{game.players.length === 2 ? "" : "s"} pour commencer</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                )
-                            )}
-
                             {canBeginVote && (
                                 <Button
                                     onClick={() => void play({ action: "beginVote" })}
@@ -575,6 +553,28 @@ export function RoomClient({ code }: RoomClientProps) {
                         <CardContent>
                             <Settings game={game} isHost={isHost} onSave={play} />
                         </CardContent>
+                        {canStartGame && (
+                            <CardFooter>
+                                    {game.players.length >= 3 ? (
+                                        <Button className="w-full" onClick={() => void play({ action: "start" })}>
+                                            Lancer la partie
+                                        </Button>
+                                    ) : (
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className="inline-block w-full">
+                                                    <Button disabled className="w-full">
+                                                        Lancer la partie
+                                                    </Button>
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="bottom">
+                                                <p>Il manque {3 - game.players.length} joueur{game.players.length === 2 ? "" : "s"} pour commencer</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    )}
+                            </CardFooter>
+                        )}
                     </Card>
                 )}
             </div>

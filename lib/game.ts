@@ -1,6 +1,7 @@
 import { randomInt, randomUUID } from "node:crypto";
 import { PlayerRole, Prisma, RoomPhase } from "@/generated/prisma/client";
 import { PublicError } from "@/lib/errors";
+import { shouldPreservePlayerAfterDeparture } from "@/lib/player-departure";
 import { prisma } from "@/lib/prisma";
 import type { PlayerSessionCredential } from "@/lib/session-token";
 import type { GameState } from "@/types/game";
@@ -195,6 +196,7 @@ export async function removePlayer(code: string, playerId: string) {
     const departingPlayerIndex = room?.players.findIndex((player) => player.id === playerId) ?? -1;
 
     if (!room || departingPlayerIndex < 0) return false;
+    if (shouldPreservePlayerAfterDeparture(room.phase)) return false;
 
     const departingPlayer = room.players[departingPlayerIndex];
     const remainingPlayers = room.players.filter((player) => player.id !== playerId);
@@ -213,7 +215,7 @@ export async function removePlayer(code: string, playerId: string) {
       });
     }
 
-    if (room.phase !== RoomPhase.LOBBY && room.phase !== RoomPhase.RESULTS && remainingPlayers.length < 3) {
+    if (room.phase !== RoomPhase.LOBBY && remainingPlayers.length < 3) {
       await transaction.room.update({
         where: { id: room.id },
         data: { phase: RoomPhase.RESULTS, winner: null, turnEndsAt: null },
