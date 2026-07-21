@@ -2,6 +2,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { PlayerRole, Prisma, RoomPhase } from "@/generated/prisma/client";
 import { PublicError } from "@/lib/errors";
 import { shouldPreservePlayerAfterDeparture } from "@/lib/player-departure";
+import { hasMinimumConnectedPlayers } from "@/lib/player-presence";
 import { prisma } from "@/lib/prisma";
 import type { PlayerSessionCredential } from "@/lib/session-token";
 import { getNextTurnProgress } from "@/lib/turn-progress";
@@ -327,6 +328,9 @@ export async function startGame(code: string, playerId: string) {
     if (!room || !isHost(room, playerId)) throw new PublicError("Action non autorisée.", 403);
     if (room.phase !== RoomPhase.LOBBY || room.players.length < 3) {
       throw new PublicError("Il faut au moins trois joueurs pour démarrer.", 409);
+    }
+    if (!hasMinimumConnectedPlayers(code, room.players.map((player) => player.id), 3)) {
+      throw new PublicError("Il faut au moins trois joueurs connectés pour démarrer.", 409);
     }
     if (room.impostorCount > room.players.length - 2) {
       throw new PublicError("Le nombre d’imposteurs est trop élevé.");

@@ -4,6 +4,7 @@ import next from "next";
 import { Server } from "socket.io";
 import { advanceExpiredTurn, getNextTurnExpiration, removePlayer } from "@/lib/game";
 import { getCookieValue, roomSessionCookieName } from "@/lib/player-cookie";
+import { markPlayerConnected, markPlayerDisconnected } from "@/lib/player-presence";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import {
   notifyRoomChanged,
@@ -246,6 +247,7 @@ void app.prepare().then(async () => {
         presence.removalTimer = undefined;
         presence.socketIds.add(socket.id);
         presenceByPlayer.set(key, presence);
+        markPlayerConnected(code, player.id);
         socket.data.presenceKey = key;
         socket.data.roomCode = code;
         socket.join(code);
@@ -258,6 +260,7 @@ void app.prepare().then(async () => {
 
           if (presence.socketIds.size > 0) return;
 
+          markPlayerDisconnected(code, player.id);
           emitRoomPresence(code);
           presence.removalTimer = setTimeout(() => {
             if (presence.socketIds.size > 0) return;

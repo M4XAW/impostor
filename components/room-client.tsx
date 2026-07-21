@@ -305,6 +305,8 @@ export function RoomClient({ code }: RoomClientProps) {
     const hasCurrentPlayerVoted = game.players.some(
         (player) => player.isSelf && player.hasVoted,
     );
+    const connectedPlayerCount = connectedPlayerPublicIds?.length ?? 0;
+    const hasEnoughConnectedPlayers = connectedPlayerCount >= 3;
     const isPlayerConnected = (publicId: string) => connectedPlayerPublicIds?.includes(publicId) ?? true;
 
     return (
@@ -631,7 +633,7 @@ export function RoomClient({ code }: RoomClientProps) {
                         </CardContent>
                         {canStartGame && (
                             <CardFooter>
-                                    {game.players.length >= 3 ? (
+                                    {hasEnoughConnectedPlayers ? (
                                         <Button className="w-full" onClick={() => void play({ action: "start" })}>
                                             Lancer la partie
                                         </Button>
@@ -645,7 +647,11 @@ export function RoomClient({ code }: RoomClientProps) {
                                                 </span>
                                             </TooltipTrigger>
                                             <TooltipContent side="bottom">
-                                                <p>Il manque {3 - game.players.length} joueur{game.players.length === 2 ? "" : "s"} pour commencer</p>
+                                                <p>
+                                                    {connectedPlayerPublicIds === null
+                                                        ? "Vérification des joueurs connectés…"
+                                                        : `Il manque ${3 - connectedPlayerCount} joueur${connectedPlayerCount === 2 ? "" : "s"} connecté${connectedPlayerCount === 2 ? "" : "s"} pour commencer`}
+                                                </p>
                                             </TooltipContent>
                                         </Tooltip>
                                     )}
