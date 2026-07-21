@@ -59,6 +59,42 @@ test("the next word starts after all its configured rounds", () => {
   );
 });
 
+test("the same word remains active throughout three configured rounds", () => {
+  const playerCount = 3;
+  const roundCount = 3;
+  const activeWordNumbers: number[] = [];
+  let currentTurn = {
+    phase: "DISCUSSION" as const,
+    currentPlayerIndex: 0,
+    roundNumber: 1,
+    wordNumber: 1,
+  };
+
+  for (let turnNumber = 0; turnNumber < playerCount * roundCount; turnNumber += 1) {
+    activeWordNumbers.push(currentTurn.wordNumber);
+
+    const nextTurn = getNextTurnProgress({
+      currentPlayerIndex: currentTurn.currentPlayerIndex,
+      playerCount,
+      roundNumber: currentTurn.roundNumber,
+      roundCount,
+      wordNumber: currentTurn.wordNumber,
+      wordCount: 2,
+    });
+
+    assert.equal(nextTurn.phase, "DISCUSSION");
+    if (nextTurn.phase === "DISCUSSION") currentTurn = nextTurn;
+  }
+
+  assert.deepEqual(activeWordNumbers, Array<number>(9).fill(1));
+  assert.deepEqual(currentTurn, {
+    phase: "DISCUSSION",
+    currentPlayerIndex: 0,
+    roundNumber: 1,
+    wordNumber: 2,
+  });
+});
+
 test("voting starts after the final configured turn", () => {
   assert.deepEqual(
     getNextTurnProgress({

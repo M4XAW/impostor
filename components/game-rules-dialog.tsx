@@ -19,7 +19,7 @@ const gameRules = [
   {
     title: "Donne un indice",
     description:
-      "À ton tour, propose un indice qui évoque ton mot sans le révéler. Un indice déjà joué pour le mot en cours ne peut pas être réutilisé.",
+      "À ton tour, propose un indice qui évoque ton mot sans le révéler. Le même mot est conservé pendant tous les tours configurés, et un indice déjà joué pour ce mot ne peut pas être réutilisé.",
   },
   {
     title: "Repère les imposteurs",
