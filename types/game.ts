@@ -5,6 +5,13 @@ export interface ServerTiming {
   sentAt: number;
 }
 
+export interface VoteResult {
+  playerPublicId: string;
+  playerName: string;
+  voteCount: number;
+  isMostVoted: boolean;
+}
+
 export interface GameState {
   code: string;
   phase: GamePhase;
@@ -19,6 +26,7 @@ export interface GameState {
     impostorNames: string[];
     civilianWord: string;
     impostorWord: string;
+    voteResults: VoteResult[];
   };
   endReason?: "NOT_ENOUGH_PLAYERS";
 }

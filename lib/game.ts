@@ -4,6 +4,8 @@ import { PublicError } from "@/lib/errors";
 import { shouldPreservePlayerAfterDeparture } from "@/lib/player-departure";
 import { prisma } from "@/lib/prisma";
 import type { PlayerSessionCredential } from "@/lib/session-token";
+import { getNextTurnProgress } from "@/lib/turn-progress";
+import { buildVoteResults } from "@/lib/vote-results";
 import type { GameState } from "@/types/game";
 
 const MAX_ROOM_CODE_ATTEMPTS = 5;
@@ -393,12 +395,16 @@ async function advanceTurnWithClient(
     return { room, changed: false };
   }
 
-  const nextIndex = room.currentPlayerIndex + 1;
-  const completedRound = nextIndex >= room.players.length;
-  const nextRound = completedRound ? room.roundNumber + 1 : room.roundNumber;
-  const nextWord = completedRound && nextRound > room.roundCount ? room.wordNumber + 1 : room.wordNumber;
+  const nextTurn = getNextTurnProgress({
+    currentPlayerIndex: room.currentPlayerIndex,
+    playerCount: room.players.length,
+    roundNumber: room.roundNumber,
+    roundCount: room.roundCount,
+    wordNumber: room.wordNumber,
+    wordCount: room.wordCount,
+  });
 
-  if (nextWord > room.wordCount) {
+  if (nextTurn.phase === "VOTING") {
     const updatedRoom = await client.room.update({
       where: { id: room.id },
       data: { phase: RoomPhase.VOTING, turnEndsAt: null },
@@ -408,14 +414,13 @@ async function advanceTurnWithClient(
     return { room: updatedRoom, changed: true };
   }
 
-  const newRound = completedRound && nextRound > room.roundCount ? 1 : nextRound;
   const nextTurnStartedAt = options.force ? now : room.turnEndsAt;
   const updatedRoom = await client.room.update({
     where: { id: room.id },
     data: {
-      currentPlayerIndex: completedRound ? 0 : nextIndex,
-      roundNumber: newRound,
-      wordNumber: nextWord,
+      currentPlayerIndex: nextTurn.currentPlayerIndex,
+      roundNumber: nextTurn.roundNumber,
+      wordNumber: nextTurn.wordNumber,
       turnEndsAt: new Date(nextTurnStartedAt.getTime() + room.turnSeconds * 1000),
     },
     include: { players: { orderBy: { createdAt: "asc" } } },
@@ -617,6 +622,7 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
             .map((player) => player.name),
           civilianWord: currentWord.civilianWord,
           impostorWord: currentWord.impostorWord,
+          voteResults: buildVoteResults(room.players, room.votes),
         }
       : undefined,
     endReason: room.phase === RoomPhase.RESULTS && !room.winner ? "NOT_ENOUGH_PLAYERS" : undefined,

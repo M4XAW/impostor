@@ -8,6 +8,7 @@ import { GameRulesDialog } from "@/components/game-rules-dialog";
 import { RoundGrid } from "@/components/round-grid";
 import { TransferHostContextMenu } from "@/components/transfer-host-context-menu";
 import { VoteConfirmationDialog } from "@/components/vote-confirmation-dialog";
+import { VoteResults } from "@/components/vote-results";
 import {
     estimateServerClockOffsetMs,
     getCountdownSeconds,
@@ -16,6 +17,7 @@ import {
 import type { GameSnapshot } from "@/types/game";
 
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Field, FieldLabel } from "@/components/ui/field";
 import {
@@ -30,7 +32,7 @@ import { Input } from "@/components/ui/input";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-import { AvatarCircle, Loader, Plus } from 'pixelarticons/react'
+import { AvatarCircle, Loader, Plus, WarningDiamond } from 'pixelarticons/react'
 
 interface RoomClientProps {
     code: string;
@@ -40,6 +42,11 @@ type SettingName = keyof GameSnapshot["settings"];
 
 interface RoomPresence {
     connectedPlayerPublicIds: string[];
+}
+
+interface ClueError {
+    turnKey: string;
+    message: string;
 }
 
 const settingFields: Array<{
@@ -85,6 +92,7 @@ export function RoomClient({ code }: RoomClientProps) {
     const [game, setGame] = useState<GameSnapshot | null>(null);
     const [error, setError] = useState("");
     const [clue, setClue] = useState("");
+    const [clueError, setClueError] = useState<ClueError | null>(null);
     const [copiedSlotIndex, setCopiedSlotIndex] = useState<number | null>(null);
     const [isLeaving, setIsLeaving] = useState(false);
     const [connectedPlayerPublicIds, setConnectedPlayerPublicIds] = useState<string[] | null>(null);
@@ -92,6 +100,9 @@ export function RoomClient({ code }: RoomClientProps) {
     const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
     const refreshVersion = useRef(0);
     const turnEndsAt = game?.turn?.endsAt;
+    const activeTurnKey = game?.turn
+        ? `${game.turn.wordNumber}:${game.turn.roundNumber}:${game.turn.currentPlayerPublicId}`
+        : null;
 
     const refresh = useCallback(async () => {
         const version = ++refreshVersion.current;
@@ -103,6 +114,9 @@ export function RoomClient({ code }: RoomClientProps) {
         if (version !== refreshVersion.current) return;
 
         if (!response.ok || !isGameSnapshot(payload)) {
+            if (response.status === 403 || response.status === 404) {
+                setGame(null);
+            }
             setError(
                 typeof payload === "object" &&
                     payload !== null &&
@@ -203,17 +217,25 @@ export function RoomClient({ code }: RoomClientProps) {
         const result: unknown = await response.json().catch(() => null);
 
         if (!response.ok) {
-            setError(
-                typeof result === "object" &&
+            const message = typeof result === "object" &&
                     result !== null &&
                     "error" in result &&
                     typeof result.error === "string"
                     ? result.error
-                    : "Action impossible.",
-            );
+                    : "Action impossible.";
+
+            if (payload.action === "clue" && activeTurnKey) {
+                setClueError({ turnKey: activeTurnKey, message });
+            } else {
+                setError(message);
+            }
+
+            return false;
         }
 
+        if (payload.action === "clue") setClueError(null);
         await refresh();
+        return true;
     }
 
     async function copyInvite(slotIndex: number) {
@@ -250,6 +272,7 @@ export function RoomClient({ code }: RoomClientProps) {
         return (
             <main className="grid place-items-center flex-1">
                 <div className="flex flex-col items-center">
+                    <WarningDiamond className="size-13 text-rose-300" />
                     <h1 className="text-2xl mb-2">Accès refusé</h1>
                     <p className="text-sm text-muted-foreground mb-4">{error}</p>
                     <Button asChild>
@@ -323,30 +346,33 @@ export function RoomClient({ code }: RoomClientProps) {
                         </h1>
 
                         {game.phase === "RESULTS" && game.result && (
-                            <dl className="mt-6 grid gap-3 border bg-muted/40 p-4 sm:grid-cols-3">
-                                <div>
-                                    <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-                                        {game.result.impostorNames.length > 1 ? "Imposteurs" : "Imposteur"}
-                                    </dt>
-                                    <dd className="mt-1">
-                                        {game.result.impostorNames.join(", ")}
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-                                        Mot des civils
-                                    </dt>
-                                    <dd className="mt-1">{game.result.civilianWord}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-                                        {game.result.impostorNames.length > 1
-                                            ? "Mot des imposteurs"
-                                            : "Mot de l’imposteur"}
-                                    </dt>
-                                    <dd className="mt-1">{game.result.impostorWord}</dd>
-                                </div>
-                            </dl>
+                            <>
+                                <dl className="mt-6 grid gap-3 border bg-muted/40 p-4 sm:grid-cols-3">
+                                    <div>
+                                        <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+                                            {game.result.impostorNames.length > 1 ? "Imposteurs" : "Imposteur"}
+                                        </dt>
+                                        <dd className="mt-1">
+                                            {game.result.impostorNames.join(", ")}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+                                            Mot des civils
+                                        </dt>
+                                        <dd className="mt-1">{game.result.civilianWord}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+                                            {game.result.impostorNames.length > 1
+                                                ? "Mot des imposteurs"
+                                                : "Mot de l’imposteur"}
+                                        </dt>
+                                        <dd className="mt-1">{game.result.impostorWord}</dd>
+                                    </div>
+                                </dl>
+                                <VoteResults results={game.result.voteResults} />
+                            </>
                         )}
 
                         {game.endReason === "NOT_ENOUGH_PLAYERS" && (
@@ -383,14 +409,14 @@ export function RoomClient({ code }: RoomClientProps) {
                                         const playerCard = (
                                             <li
                                                 key={player.publicId}
-                                                className={`grid aspect-square min-w-0 place-items-center border border-dotted ${player.isHost ? "border-white bg-white text-black" : ""} ${canTransferHost ? "cursor-context-menu focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" : ""}`}
+                                                className={`grid aspect-square min-w-0 place-items-center border border-dotted ${player.isHost ? "border-white bg-white text-black" : ""} ${canTransferHost ? "cursor-context-menu focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" : ""} transition-opacity ${isPlayerConnected(player.publicId) ? "" : "opacity-40"}`}
                                                 tabIndex={canTransferHost ? 0 : undefined}
                                                 aria-label={canTransferHost ? `${player.name}, menu de gestion du joueur` : undefined}
                                             >
                                                 <div className="flex flex-col items-center gap-2">
                                                     <AvatarCircle />
                                                     <div
-                                                        className={`flex max-w-full flex-col items-center gap-1 transition-opacity ${isPlayerConnected(player.publicId) ? "" : "opacity-40"}`}
+                                                        className={`flex max-w-full flex-col items-center gap-1`}
                                                     >
                                                         <span className="max-w-full wrap-anywhere text-center">
                                                             {player.name}
@@ -454,10 +480,12 @@ export function RoomClient({ code }: RoomClientProps) {
                                 onSubmit={(event) => {
                                     event.preventDefault();
 
-                                    if (clue.trim()) {
-                                        void play({ action: "clue", content: clue.trim() });
-                                        setClue("");
-                                    }
+                                    const content = clue.trim();
+                                    if (!content) return;
+
+                                    void play({ action: "clue", content }).then((succeeded) => {
+                                        if (succeeded) setClue("");
+                                    });
                                 }}
                             >
                                 <Field>
@@ -475,6 +503,14 @@ export function RoomClient({ code }: RoomClientProps) {
                                     </ButtonGroup>
                                 </Field>
                             </form>
+                        )}
+
+                        {canSubmitClue && clueError?.turnKey === activeTurnKey && (
+                            <Alert variant="destructive" className="mt-3">
+                                <WarningDiamond aria-hidden="true" />
+                                <AlertTitle>Indice refusé</AlertTitle>
+                                <AlertDescription>{clueError.message}</AlertDescription>
+                            </Alert>
                         )}
 
                         {game.phase !== "LOBBY" && (
@@ -551,7 +587,13 @@ export function RoomClient({ code }: RoomClientProps) {
                 {game.phase === "LOBBY" && (
                     <Card>
                         <CardContent>
-                            <Settings game={game} isHost={isHost} onSave={play} />
+                            <Settings
+                                game={game}
+                                isHost={isHost}
+                                onSave={async (payload) => {
+                                    await play(payload);
+                                }}
+                            />
                         </CardContent>
                         {canStartGame && (
                             <CardFooter>
