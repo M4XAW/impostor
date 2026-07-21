@@ -101,9 +101,7 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                                                     ? player.isSelf
                                                         ? "À ton tour"
                                                         : "En train de jouer"
-                                                    : game.phase === "VOTING" || game.phase === "RESULTS"
-                                                        ? "Aucun mot saisi"
-                                                        : "—"
+                                                    : "Aucun mot saisi"
                                             )}
                                         </td>
                                     );
