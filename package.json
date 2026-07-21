@@ -9,6 +9,7 @@
     "start": "tsx server.ts",
     "lint": "eslint",
     "test": "tsx --test tests/*.test.ts",
+    "db:seed": "prisma db seed",
     "db:studio": "prisma studio"
   },
   "dependencies": {

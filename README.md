@@ -105,6 +105,9 @@ pnpm build
 # Générer le client Prisma après une modification de schéma
 pnpm prisma generate
 
+# Réinstaller ou compléter le catalogue de 5 000 paires de mots
+pnpm db:seed
+
 # Créer une nouvelle migration lors d’une évolution du schéma
 pnpm prisma migrate dev --name description_du_changement
 ```
