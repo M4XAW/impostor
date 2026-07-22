@@ -1,7 +1,9 @@
 import { EventEmitter } from "node:events";
+import type { PlayerActivityEvent } from "@/lib/player-activity";
 
 export interface RoomChange {
   removedPlayerPublicId?: string;
+  playerActivity?: PlayerActivityEvent;
 }
 
 const globalForRealtime = globalThis as unknown as { roomEvents?: EventEmitter };

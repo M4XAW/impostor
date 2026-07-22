@@ -15,6 +15,7 @@ import {
 } from "@/lib/game";
 import { getClientAddress, readJsonBody, validateMutationOrigin } from "@/lib/http-security";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import type { PlayerActivityEvent } from "@/lib/player-activity";
 import { notifyRoomChanged } from "@/lib/realtime";
 import { getValidRoomCode } from "@/lib/room-code";
 import {
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
     const parsed = actionSchema.safeParse(await readJsonBody(request));
     if (!parsed.success) throw new PublicError("Action invalide.");
     let removedPlayerPublicId: string | undefined;
+    let playerActivity: PlayerActivityEvent | undefined;
 
     if (parsed.data.action === "start") await startGame(code, player.id);
     if (parsed.data.action === "nextWord") await startNextWord(code, player.id);
@@ -115,14 +117,24 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
       await transferHost(code, player.id, parsed.data.targetPlayerPublicId);
     }
     if (parsed.data.action === "kick") {
-      await kickPlayer(code, player.id, parsed.data.targetPlayerPublicId);
-      removedPlayerPublicId = parsed.data.targetPlayerPublicId;
+      const removedPlayer = await kickPlayer(code, player.id, parsed.data.targetPlayerPublicId);
+      removedPlayerPublicId = removedPlayer.publicId;
+      playerActivity = {
+        type: "left",
+        playerPublicId: removedPlayer.publicId,
+        playerName: removedPlayer.name,
+      };
     }
     if (parsed.data.action === "clue") await submitClue(code, player.id, parsed.data.content);
     if (parsed.data.action === "leave") {
       await removePlayer(code, player.id);
       await clearRoomSessionToken(code);
       removedPlayerPublicId = player.publicId;
+      playerActivity = {
+        type: "left",
+        playerPublicId: player.publicId,
+        playerName: player.name,
+      };
     }
     if (parsed.data.action === "settings") {
       const { wordCount, roundCount, turnSeconds, impostorCount } = parsed.data;
@@ -134,7 +146,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
       });
     }
 
-    notifyRoomChanged(code, { removedPlayerPublicId });
+    notifyRoomChanged(code, { removedPlayerPublicId, playerActivity });
     return privateJson({ ok: true });
   } catch (error) {
     const response = publicErrorResponse(error, "Action impossible.");

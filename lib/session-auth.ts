@@ -15,6 +15,7 @@ export async function authenticateRoomSession(code: string, token: string | unde
     select: {
       id: true,
       publicId: true,
+      name: true,
       roomId: true,
       lastSeenAt: true,
     },

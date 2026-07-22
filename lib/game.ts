@@ -298,7 +298,7 @@ export async function transferHost(code: string, currentHostId: string, targetPl
 }
 
 export async function kickPlayer(code: string, hostId: string, targetPlayerPublicId: string) {
-  await runSerializable(async (transaction) => {
+  return runSerializable(async (transaction) => {
     const room = await transaction.room.findUnique({
       where: { code },
       include: { players: true },
@@ -316,6 +316,7 @@ export async function kickPlayer(code: string, hostId: string, targetPlayerPubli
     if (targetPlayer.id === hostId) throw new PublicError("L’hôte ne peut pas se retirer lui-même ainsi.");
 
     await transaction.player.delete({ where: { id: targetPlayer.id } });
+    return { publicId: targetPlayer.publicId, name: targetPlayer.name };
   });
 }
 

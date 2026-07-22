@@ -33,9 +33,15 @@ export async function POST(request: NextRequest) {
 
       enforceRateLimit(`rooms:join:${clientAddress}:${code}`, 12, 60_000);
       const credential = createPlayerSessionCredential();
-      await joinRoom(code, joinRequest.data.name, credential);
+      const { player } = await joinRoom(code, joinRequest.data.name, credential);
       await setRoomSessionToken(code, credential);
-      notifyRoomChanged(code);
+      notifyRoomChanged(code, {
+        playerActivity: {
+          type: "joined",
+          playerPublicId: player.publicId,
+          playerName: player.name,
+        },
+      });
 
       return Response.json({ code });
     }

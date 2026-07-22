@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
+import { toast } from "sonner";
 import { FullScreenLoader } from "@/components/full-screen-loader";
 import { GameRulesDialog } from "@/components/game-rules-dialog";
+import { LeaveRoomDialog } from "@/components/leave-room-dialog";
 import { RoundGrid } from "@/components/round-grid";
 import { TransferHostContextMenu } from "@/components/transfer-host-context-menu";
 import { VoteConfirmationDialog } from "@/components/vote-confirmation-dialog";
@@ -14,6 +16,7 @@ import {
     getCountdownSeconds,
     getNextCountdownUpdateDelay,
 } from "@/lib/server-clock";
+import { isPlayerActivityEvent } from "@/lib/player-activity";
 import type { GameSnapshot } from "@/types/game";
 
 import { Button } from "@/components/ui/button";
@@ -32,7 +35,7 @@ import { Input } from "@/components/ui/input";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
-import { AvatarCircle, Loader, Plus, WarningDiamond } from 'pixelarticons/react'
+import { AvatarCircle, Plus, WarningDiamond } from 'pixelarticons/react'
 
 interface RoomClientProps {
     code: string;
@@ -99,6 +102,7 @@ export function RoomClient({ code }: RoomClientProps) {
     const [now, setNow] = useState(0);
     const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
     const refreshVersion = useRef(0);
+    const selfPlayerPublicId = useRef<string | undefined>(undefined);
     const turnEndsAt = game?.turn?.endsAt;
     const activeTurnKey = game?.turn
         ? `${game.turn.wordNumber}:${game.turn.roundNumber}:${game.turn.currentPlayerPublicId}`
@@ -135,6 +139,7 @@ export function RoomClient({ code }: RoomClientProps) {
         ));
         setNow(clientReceivedAt);
         setGame(payload);
+        selfPlayerPublicId.current = payload.players.find((player) => player.isSelf)?.publicId;
         setError("");
     }, [code]);
 
@@ -191,6 +196,26 @@ export function RoomClient({ code }: RoomClientProps) {
         socket.on("room:presence", (presence: unknown) => {
             if (isRoomPresence(presence)) {
                 setConnectedPlayerPublicIds(presence.connectedPlayerPublicIds);
+            }
+        });
+        socket.on("room:player-activity", (activity: unknown) => {
+            if (
+                !isPlayerActivityEvent(activity) ||
+                activity.playerPublicId === selfPlayerPublicId.current
+            ) {
+                return;
+            }
+
+            const hasJoined = activity.type === "joined";
+            const options = {
+                description: `${activity.playerName} a ${hasJoined ? "rejoint" : "quitté"} la partie.`,
+                duration: 5_000,
+            };
+
+            if (hasJoined) {
+                toast.success("Joueur arrivé", options);
+            } else {
+                toast.info("Joueur parti", options);
             }
         });
 
@@ -328,15 +353,10 @@ export function RoomClient({ code }: RoomClientProps) {
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
                                 <GameRulesDialog />
-                                <Button
-                                    type="button"
-                                    variant="destructive"
-                                    size="sm"
-                                    disabled={isLeaving}
-                                    onClick={() => void leaveRoom()}
-                                >
-                                    {isLeaving ? <Loader className="animate-spin" /> : "Quitter"}
-                                </Button>
+                                <LeaveRoomDialog
+                                    isLeaving={isLeaving}
+                                    onConfirm={() => void leaveRoom()}
+                                />
                             </div>
                         </div>
 
@@ -430,7 +450,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                         const playerCard = (
                                             <li
                                                 key={player.publicId}
-                                                className={`grid aspect-square min-w-0 place-items-center border border-dotted ${player.isHost ? "border-white bg-white text-black" : ""} ${canTransferHost ? "cursor-context-menu focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" : ""} transition-opacity ${isPlayerConnected(player.publicId) ? "" : "opacity-40"}`}
+                                                className={`grid aspect-square min-w-0 place-items-center border border-dotted p-3 ${player.isHost ? "border-white bg-white text-black" : ""} ${canTransferHost ? "cursor-context-menu focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" : ""} transition-opacity ${isPlayerConnected(player.publicId) ? "" : "opacity-40"}`}
                                                 tabIndex={canTransferHost ? 0 : undefined}
                                                 aria-label={canTransferHost ? `${player.name}, menu de gestion du joueur` : undefined}
                                             >

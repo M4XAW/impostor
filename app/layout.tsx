@@ -3,6 +3,7 @@ import { GeistPixelSquare, } from 'geist/font/pixel';
 import "./globals.css";
 
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { Toaster } from "@/components/ui/sonner";
 import { Header } from "@/components/header";
 import { CornerMarkers } from "@/components/ui/corner-markers";
 import appPackage from "@/package.json"
@@ -41,6 +42,7 @@ export default function RootLayout({
                         <TooltipProvider>{children}</TooltipProvider>
                     </div>
                 </div>
+                <Toaster position="top-right" closeButton />
             </body>
         </html>
     );

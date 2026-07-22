@@ -23,8 +23,10 @@ interface PlayerPresence {
   code: string;
   playerId: string;
   playerPublicId: string;
+  playerName: string;
   socketIds: Set<string>;
   removalTimer?: ReturnType<typeof setTimeout>;
+  isPermanentlyRemoved?: boolean;
 }
 
 interface RoomSubscription {
@@ -188,17 +190,25 @@ void app.prepare().then(async () => {
       socketCount: 1,
       unsubscribe: subscribeToRoomChanges(code, (change) => {
         if (change.removedPlayerPublicId) {
-          const removedPresence = [...presenceByPlayer.values()].find(
-            (presence) =>
+          const removedPresenceEntry = [...presenceByPlayer.entries()].find(
+            ([, presence]) =>
               presence.code === code &&
               presence.playerPublicId === change.removedPlayerPublicId,
           );
+
+          const [removedPresenceKey, removedPresence] = removedPresenceEntry ?? [];
+          if (removedPresence?.removalTimer) clearTimeout(removedPresence.removalTimer);
+          if (removedPresence) removedPresence.isPermanentlyRemoved = true;
+          if (removedPresenceKey) presenceByPlayer.delete(removedPresenceKey);
 
           removedPresence?.socketIds.forEach((socketId) => {
             io.sockets.sockets.get(socketId)?.disconnect(true);
           });
         }
 
+        if (change.playerActivity) {
+          io.to(code).emit("room:player-activity", change.playerActivity);
+        }
         io.to(code).emit("room:changed");
       }),
     });
@@ -234,6 +244,7 @@ void app.prepare().then(async () => {
           code,
           playerId: player.id,
           playerPublicId: player.publicId,
+          playerName: player.name,
           socketIds: new Set<string>(),
         };
 
@@ -262,13 +273,21 @@ void app.prepare().then(async () => {
 
           markPlayerDisconnected(code, player.id);
           emitRoomPresence(code);
+          if (presence.isPermanentlyRemoved) return;
+
           presence.removalTimer = setTimeout(() => {
             if (presence.socketIds.size > 0) return;
 
             void removePlayer(code, player.id)
-              .then((removed) => {
+              .then(() => {
                 presenceByPlayer.delete(key);
-                if (removed) notifyRoomChanged(code);
+                notifyRoomChanged(code, {
+                  playerActivity: {
+                    type: "left",
+                    playerPublicId: presence.playerPublicId,
+                    playerName: presence.playerName,
+                  },
+                });
                 emitRoomPresence(code);
               })
               .catch((error: unknown) => {
