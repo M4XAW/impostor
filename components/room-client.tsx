@@ -34,6 +34,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { RiLoginBoxLine, RiLogoutBoxLine } from "@remixicon/react";
 
 import { AvatarCircle, Plus, WarningDiamond } from 'pixelarticons/react'
 
@@ -207,16 +208,7 @@ export function RoomClient({ code }: RoomClientProps) {
             }
 
             const hasJoined = activity.type === "joined";
-            const options = {
-                description: `${activity.playerName} a ${hasJoined ? "rejoint" : "quitté"} la partie.`,
-                duration: 5_000,
-            };
-
-            if (hasJoined) {
-                toast.success("Joueur arrivé", options);
-            } else {
-                toast.info("Joueur parti", options);
-            }
+            toast(`${activity.playerName} a ${hasJoined ? "rejoint" : "quitté"} la partie.`);
         });
 
         return () => {
