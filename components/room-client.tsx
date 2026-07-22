@@ -17,6 +17,11 @@ import {
     getNextCountdownUpdateDelay,
 } from "@/lib/server-clock";
 import { isPlayerActivityEvent } from "@/lib/player-activity";
+import {
+    createNotificationSound,
+    disposeNotificationSound,
+    playNotificationSound,
+} from "@/lib/notification-sound";
 import type { GameSnapshot } from "@/types/game";
 
 import { Button } from "@/components/ui/button";
@@ -104,10 +109,36 @@ export function RoomClient({ code }: RoomClientProps) {
     const [serverClockOffsetMs, setServerClockOffsetMs] = useState(0);
     const refreshVersion = useRef(0);
     const selfPlayerPublicId = useRef<string | undefined>(undefined);
+    const observedTurn = useRef<{ roomCode: string; turnKey: string } | null>(null);
+    const turnSound = useRef<HTMLAudioElement | null>(null);
     const turnEndsAt = game?.turn?.endsAt;
     const activeTurnKey = game?.turn
         ? `${game.turn.wordNumber}:${game.turn.roundNumber}:${game.turn.currentPlayerPublicId}`
         : null;
+
+    useEffect(() => {
+        const sound = createNotificationSound();
+        turnSound.current = sound;
+
+        return () => {
+            turnSound.current = null;
+            disposeNotificationSound(sound);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!activeTurnKey) return;
+
+        if (!observedTurn.current || observedTurn.current.roomCode !== code) {
+            observedTurn.current = { roomCode: code, turnKey: activeTurnKey };
+            return;
+        }
+
+        if (observedTurn.current.turnKey === activeTurnKey) return;
+
+        observedTurn.current = { roomCode: code, turnKey: activeTurnKey };
+        if (turnSound.current) playNotificationSound(turnSound.current);
+    }, [activeTurnKey, code]);
 
     const refresh = useCallback(async () => {
         const version = ++refreshVersion.current;

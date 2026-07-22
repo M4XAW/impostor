@@ -4,18 +4,20 @@ import { useEffect } from "react"
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { RiCheckboxCircleLine, RiInformationLine, RiErrorWarningLine, RiCloseCircleLine, RiLoaderLine } from "@remixicon/react"
+import {
+  createNotificationSound,
+  disposeNotificationSound,
+  playNotificationSound,
+} from "@/lib/notification-sound"
 
 const TOAST_SELECTOR = "[data-sonner-toast]"
-const TOAST_SOUND_PATH = "/sounds/notification.mp3"
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
 
   useEffect(() => {
-    const audio = new Audio(TOAST_SOUND_PATH)
+    const sound = createNotificationSound()
     const knownToasts = new WeakSet<Element>()
-
-    audio.preload = "auto"
 
     document.querySelectorAll(TOAST_SELECTOR).forEach((toast) => {
       knownToasts.add(toast)
@@ -27,10 +29,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
 
       knownToasts.add(toast)
-      audio.currentTime = 0
-      void audio.play().catch(() => {
-        console.warn("Failed to play toast sound. User interaction may be required.")
-      })
+      playNotificationSound(sound)
     }
 
     const observer = new MutationObserver((mutations) => {
@@ -53,9 +52,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
 
     return () => {
       observer.disconnect()
-      audio.pause()
-      audio.removeAttribute("src")
-      audio.load()
+      disposeNotificationSound(sound)
     }
   }, [])
 
