@@ -94,7 +94,7 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                                     return (
                                         <td
                                             key={player.publicId}
-                                            className={`min-w-36 border-r border-b px-3 py-3 transition-opacity ${isActive ? "bg-orange-400/10 text-orange-300" : ""} ${connectedPlayerPublicIds?.includes(player.publicId) === false ? "opacity-40" : ""}`}
+                                            className={`min-w-36 border-r border-b px-3 py-3 transition-opacity ${isActive ? "bg-orange-400/10 text-orange-300" : ""} ${clue?.content == null && !isActive ? "text-muted-foreground" : ""} ${connectedPlayerPublicIds?.includes(player.publicId) === false ? "opacity-40" : ""}`}
                                         >
                                             {clue?.content ?? (
                                                 isActive

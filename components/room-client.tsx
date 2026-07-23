@@ -58,6 +58,8 @@ interface ClueError {
     message: string;
 }
 
+const MAX_PLAYERS = 6;
+
 const settingFields: Array<{
     name: SettingName;
     label: string;
@@ -399,6 +401,10 @@ export function RoomClient({ code }: RoomClientProps) {
                                         : "Qui est l’imposteur ?"}
                         </h1>
 
+                        {game.phase === "LOBBY" && (
+                            <p className="mt-2 text-sm text-muted-foreground" role="status">{game.players.length} / {MAX_PLAYERS}</p>
+                        )}
+
                         {game.phase === "RESULTS" && game.result && (
                             <>
                                 <dl className="mt-6 grid gap-3 border bg-muted/40 p-4 sm:grid-cols-3">
@@ -515,7 +521,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                             </TransferHostContextMenu>
                                         );
                                     })}
-                                    {Array.from({ length: Math.max(0, 6 - game.players.length) }).map((_, index) => (
+                                    {Array.from({ length: Math.max(0, MAX_PLAYERS - game.players.length) }).map((_, index) => (
                                         <li
                                             key={`empty-player-slot-${index}`}
                                             className="aspect-square min-w-0 border border-dotted text-muted-foreground"
