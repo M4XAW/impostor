@@ -40,3 +40,13 @@ export function hasMinimumConnectedPlayers(
 
   return false;
 }
+
+export function areAllRoomPlayersConnected(
+  code: string,
+  roomPlayerIds: readonly string[],
+) {
+  const connectedPlayerIds = connectedPlayerIdsByRoom.get(code);
+  if (!connectedPlayerIds || roomPlayerIds.length === 0) return false;
+
+  return roomPlayerIds.every((playerId) => connectedPlayerIds.has(playerId));
+}

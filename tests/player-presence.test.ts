@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  areAllRoomPlayersConnected,
   hasMinimumConnectedPlayers,
   markPlayerConnected,
   markPlayerDisconnected,
@@ -25,4 +26,15 @@ test("connected players outside the room are not counted", () => {
   markPlayerConnected(code, crypto.randomUUID());
 
   assert.equal(hasMinimumConnectedPlayers(code, roomPlayerIds, 3), false);
+});
+
+test("every room player must be connected before a game starts", () => {
+  const code = "RDY-ROOM";
+  const playerIds = ["ready-a", "ready-b", "ready-c"];
+
+  playerIds.forEach((playerId) => markPlayerConnected(code, playerId));
+  assert.equal(areAllRoomPlayersConnected(code, playerIds), true);
+
+  markPlayerDisconnected(code, playerIds[1]);
+  assert.equal(areAllRoomPlayersConnected(code, playerIds), false);
 });

@@ -6,7 +6,10 @@ import { assertGamePhaseTransition } from "@/lib/game-phase";
 import {
   shouldEndGameAfterDeparture,
 } from "@/lib/player-departure";
-import { hasMinimumConnectedPlayers } from "@/lib/player-presence";
+import {
+  areAllRoomPlayersConnected,
+  hasMinimumConnectedPlayers,
+} from "@/lib/player-presence";
 import { prisma } from "@/lib/prisma";
 import { selectImpostorPlayerIds } from "@/lib/role-assignment";
 import { buildSeriesSummary } from "@/lib/series-summary";
@@ -268,6 +271,29 @@ export async function updateSettings(code: string, playerId: string, settings: R
     }
 
     await transaction.room.update({ where: { id: room.id }, data: settings });
+    await transaction.player.updateMany({
+      where: { roomId: room.id },
+      data: { isReady: false },
+    });
+  });
+}
+
+export async function updatePlayerReady(code: string, playerId: string, isReady: boolean) {
+  await runSerializable(async (transaction) => {
+    const room = await transaction.room.findUnique({
+      where: { code },
+      include: { players: true },
+    });
+    const player = room?.players.find((candidate) => candidate.id === playerId);
+
+    if (!room || room.phase !== RoomPhase.LOBBY || !player) {
+      throw new PublicError("Le statut prêt ne peut être modifié que dans le salon.", 409);
+    }
+
+    await transaction.player.update({
+      where: { id: player.id },
+      data: { isReady },
+    });
   });
 }
 
@@ -356,6 +382,12 @@ export async function startGame(code: string, playerId: string) {
     }
     if (!hasMinimumConnectedPlayers(code, room.players.map((player) => player.id), 3)) {
       throw new PublicError("Il faut au moins trois joueurs connectés pour démarrer.", 409);
+    }
+    if (!areAllRoomPlayersConnected(code, room.players.map((player) => player.id))) {
+      throw new PublicError("Tous les joueurs du salon doivent être connectés pour démarrer.", 409);
+    }
+    if (!room.players.every((player) => player.isReady)) {
+      throw new PublicError("Tous les joueurs doivent être prêts pour démarrer.", 409);
     }
     if (room.impostorCount > room.players.length - 2) {
       throw new PublicError("Le nombre d’imposteurs est trop élevé.");
@@ -756,6 +788,7 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
       name: player.name,
       isSelf: player.id === currentPlayer.id,
       isHost: player.id === room.hostId,
+      isReady: player.isReady,
       hasVoted: currentMatchVotes.some(
         (vote) => vote.matchNumber === room.matchNumber && vote.voterId === player.id,
       ),

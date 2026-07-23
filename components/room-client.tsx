@@ -41,8 +41,6 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { RiLoginBoxLine, RiLogoutBoxLine } from "@remixicon/react";
-
 import { AvatarCircle, Plus, WarningDiamond } from 'pixelarticons/react'
 
 interface RoomClientProps {
@@ -359,7 +357,19 @@ export function RoomClient({ code }: RoomClientProps) {
         (player) => player.isSelf && player.hasVoted,
     );
     const connectedPlayerCount = connectedPlayerPublicIds?.length ?? 0;
-    const hasEnoughConnectedPlayers = connectedPlayerCount >= 3;
+    const allPlayersReady = game.players.length >= 3 && game.players.every((player) => player.isReady);
+    const allPlayersConnected = connectedPlayerPublicIds !== null &&
+        connectedPlayerCount === game.players.length;
+    const canLaunchGame = allPlayersReady && allPlayersConnected;
+    const startRequirement = connectedPlayerPublicIds === null
+        ? "Vérification des joueurs connectés…"
+        : game.players.length < 3
+            ? `Il manque ${3 - game.players.length} joueur${game.players.length === 2 ? "" : "s"} pour commencer`
+            : !allPlayersConnected
+                ? "Tous les joueurs du salon doivent être connectés"
+                : !allPlayersReady
+                    ? "Tous les joueurs doivent être prêts"
+                    : null;
     const isPlayerConnected = (publicId: string) => connectedPlayerPublicIds?.includes(publicId) ?? true;
 
     return (
@@ -510,10 +520,13 @@ export function RoomClient({ code }: RoomClientProps) {
                                                     <div
                                                         className={`flex max-w-full flex-col items-center gap-1`}
                                                     >
-                                                        <span className="max-w-full wrap-anywhere text-center">
-                                                            {player.name}
-                                                        </span>
-                                                        {!isPlayerConnected(player.publicId) && (
+                                                         <span className="max-w-full wrap-anywhere text-center">
+                                                             {player.name}
+                                                         </span>
+                                                         <span className={`text-[0.65rem] uppercase tracking-wider ${player.isHost ? "text-black/60" : player.isReady ? "text-emerald-300" : "text-muted-foreground"}`}>
+                                                             {player.isReady ? "Prêt" : "Pas prêt"}
+                                                         </span>
+                                                         {!isPlayerConnected(player.publicId) && (
                                                             <span className="sr-only"> — hors ligne</span>
                                                         )}
                                                     </div>
@@ -561,9 +574,23 @@ export function RoomClient({ code }: RoomClientProps) {
                                                 )}
                                             </button>
                                         </li>
-                                    ))}
-                                </ul>
-                            </>
+                                     ))}
+                                 </ul>
+                                 {selfPlayer && (
+                                     <Button
+                                         type="button"
+                                         className="mt-4"
+                                         variant={selfPlayer.isReady ? "outline" : "default"}
+                                         aria-pressed={selfPlayer.isReady}
+                                         onClick={() => void play({
+                                             action: "ready",
+                                             isReady: !selfPlayer.isReady,
+                                         })}
+                                     >
+                                         {selfPlayer.isReady ? "Annuler mon statut prêt" : "Je suis prêt"}
+                                     </Button>
+                                 )}
+                             </>
                         )}
 
                         {canSubmitClue && (
@@ -681,7 +708,7 @@ export function RoomClient({ code }: RoomClientProps) {
                         </CardContent>
                         {canStartGame && (
                             <CardFooter>
-                                    {hasEnoughConnectedPlayers ? (
+                                    {canLaunchGame ? (
                                         <Button className="w-full" onClick={() => void play({ action: "start" })}>
                                             Lancer la partie
                                         </Button>
@@ -695,11 +722,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                                 </span>
                                             </TooltipTrigger>
                                             <TooltipContent side="bottom">
-                                                <p>
-                                                    {connectedPlayerPublicIds === null
-                                                        ? "Vérification des joueurs connectés…"
-                                                        : `Il manque ${3 - connectedPlayerCount} joueur${connectedPlayerCount === 2 ? "" : "s"} pour commencer`}
-                                                </p>
+                                                <p>{startRequirement}</p>
                                             </TooltipContent>
                                         </Tooltip>
                                     )}

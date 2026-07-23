@@ -60,7 +60,14 @@ export interface GameState {
     endsAt: string;
     canStartVote: boolean;
   };
-  players: Array<{ publicId: string; name: string; isSelf: boolean; isHost: boolean; hasVoted: boolean }>;
+  players: Array<{
+    publicId: string;
+    name: string;
+    isSelf: boolean;
+    isHost: boolean;
+    isReady: boolean;
+    hasVoted: boolean;
+  }>;
   currentPlayer: { name: string; isHost: boolean; word?: string };
   clues: Array<{
     playerPublicId: string;

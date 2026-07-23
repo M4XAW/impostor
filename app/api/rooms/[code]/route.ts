@@ -12,6 +12,7 @@ import {
   startNextMatch,
   submitClue,
   transferHost,
+  updatePlayerReady,
   updateSettings,
 } from "@/lib/game";
 import { getClientAddress, readJsonBody, validateMutationOrigin } from "@/lib/http-security";
@@ -35,6 +36,7 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("transferHost"), targetPlayerPublicId: z.string().uuid() }),
   z.object({ action: z.literal("kick"), targetPlayerPublicId: z.string().uuid() }),
   z.object({ action: z.literal("leave") }),
+  z.object({ action: z.literal("ready"), isReady: z.boolean() }),
   z.object({
     action: z.literal("clue"),
     content: z.string().trim().min(1).max(40),
@@ -138,6 +140,9 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
         playerPublicId: player.publicId,
         playerName: player.name,
       };
+    }
+    if (parsed.data.action === "ready") {
+      await updatePlayerReady(code, player.id, parsed.data.isReady);
     }
     if (parsed.data.action === "settings") {
       const { matchCount, clueRoundCount, turnSeconds, impostorCount } = parsed.data;
