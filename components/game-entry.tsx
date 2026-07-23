@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEventHandler, useState } from "react";
+import { type FormEventHandler, type KeyboardEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ROOM_CODE_PATTERN } from "@/lib/room-code";
 
@@ -22,6 +22,8 @@ export function GameEntry({ joinCode }: GameEntryProps) {
     const [roomCode, setRoomCode] = useState(joinCode ?? "");
     const [message, setMessage] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const createTabRef = useRef<HTMLButtonElement>(null);
+    const joinTabRef = useRef<HTMLButtonElement>(null);
     const router = useRouter();
 
     const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
@@ -50,30 +52,60 @@ export function GameEntry({ joinCode }: GameEntryProps) {
 
     const isCreating = mode === "create";
 
+    const selectMode = (nextMode: EntryMode) => {
+        setMode(nextMode);
+        setMessage("");
+    };
+
+    const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+
+        event.preventDefault();
+        const nextMode = isCreating ? "join" : "create";
+        selectMode(nextMode);
+        (nextMode === "create" ? createTabRef : joinTabRef).current?.focus();
+    };
+
     return (
         <Card className="max-w-sm w-full" aria-labelledby="game-entry-title">
             <CardHeader>
                 <div className="flex gap-2 mb-4" role="tablist" aria-label="Accès à une partie">
                     <Button
+                        ref={createTabRef}
+                        id="create-game-tab"
                         className="flex-1"
                         type="button"
                         role="tab"
                         aria-selected={isCreating}
-                        onClick={() => { setMode("create"); setMessage(""); }}
+                        aria-controls="game-entry-panel"
+                        tabIndex={isCreating ? 0 : -1}
+                        variant={isCreating ? "default" : "outline"}
+                        onClick={() => selectMode("create")}
+                        onKeyDown={handleTabKeyDown}
                     >
                         Créer une partie
                     </Button>
                     <Button
+                        ref={joinTabRef}
+                        id="join-game-tab"
                         className="flex-1"
                         type="button"
                         role="tab"
                         aria-selected={!isCreating}
-                        onClick={() => { setMode("join"); setMessage(""); }}
+                        aria-controls="game-entry-panel"
+                        tabIndex={isCreating ? -1 : 0}
+                        variant={isCreating ? "outline" : "default"}
+                        onClick={() => selectMode("join")}
+                        onKeyDown={handleTabKeyDown}
                     >
                         Rejoindre
                     </Button>
                 </div>
-                <div>
+                <div
+                    id="game-entry-panel"
+                    role="tabpanel"
+                    aria-labelledby={isCreating ? "create-game-tab" : "join-game-tab"}
+                >
                     <h2 id="game-entry-title" className="text-2xl text-white">
                         {isCreating ? "Créer une partie" : "Rejoindre une partie"}
                     </h2>
