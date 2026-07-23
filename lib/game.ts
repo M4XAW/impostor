@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { selectImpostorPlayerIds } from "@/lib/role-assignment";
 import type { PlayerSessionCredential } from "@/lib/session-token";
 import { getNextTurnProgress } from "@/lib/turn-progress";
+import { determineVoteOutcome } from "@/lib/vote-outcome";
 import { buildVoteResults } from "@/lib/vote-results";
 import type { GameState } from "@/types/game";
 
@@ -590,20 +591,14 @@ async function finalizeVoteIfComplete(
 
   const totals = new Map<string, number>();
   votes.forEach((vote) => totals.set(vote.targetId, (totals.get(vote.targetId) ?? 0) + 1));
-  const highestScore = Math.max(...totals.values());
-  const mostVoted = new Set(
-    [...totals].filter(([, score]) => score === highestScore).map(([targetId]) => targetId),
-  );
-  const civiliansWin = players.some(
-    (player) => player.role === PlayerRole.IMPOSTOR && mostVoted.has(player.id),
-  );
-  const winner = civiliansWin ? WinnerTeam.CIVILIANS : WinnerTeam.IMPOSTORS;
+  const { winner, isTie } = determineVoteOutcome(players, votes);
 
   await transaction.matchResult.create({
     data: {
       roomId: room.id,
       matchNumber: room.matchNumber,
       winner,
+      isVoteTie: isTie,
       civilianWord: matchWord.civilianWord,
       impostorWord: matchWord.impostorWord,
       playerResults: {
@@ -674,6 +669,7 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
       votes: { include: { voter: true, target: true } },
       clues: { include: { player: true }, orderBy: { createdAt: "asc" } },
       matchWords: { orderBy: { matchNumber: "asc" } },
+      matchResults: true,
     },
   });
   const currentPlayer = room?.players.find((player) => player.id === playerId);
@@ -681,12 +677,18 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
 
   const currentTurnPlayer = room.players[room.currentPlayerIndex];
   const currentWord = room.matchWords.find((word) => word.matchNumber === room.matchNumber);
+  const currentMatchResult = room.matchResults.find(
+    (matchResult) => matchResult.matchNumber === room.matchNumber,
+  );
   const showAllMatches = room.phase === RoomPhase.RESULTS &&
     (!room.matchWinner || room.matchNumber >= room.matchCount);
   const visibleClues = selectVisibleMatchItems(
     room.clues,
     room.matchNumber,
     showAllMatches,
+  );
+  const currentMatchVotes = room.votes.filter(
+    (vote) => vote.matchNumber === room.matchNumber,
   );
 
   return {
@@ -712,7 +714,7 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
       name: player.name,
       isSelf: player.id === currentPlayer.id,
       isHost: player.id === room.hostId,
-      hasVoted: room.votes.some(
+      hasVoted: currentMatchVotes.some(
         (vote) => vote.matchNumber === room.matchNumber && vote.voterId === player.id,
       ),
     })),
@@ -732,18 +734,15 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
       matchNumber: clue.matchNumber,
       clueRoundNumber: clue.clueRoundNumber,
     })),
-    votes: room.votes
-      .filter((vote) => vote.matchNumber === room.matchNumber)
-      .map((vote) => ({
-      voterPublicId: vote.voter.publicId,
-      voterName: vote.voter.name,
-      targetPublicId: vote.target.publicId,
-      targetName: vote.target.name,
-    })),
+    voteProgress: {
+      submittedCount: currentMatchVotes.length,
+      requiredCount: room.players.length,
+    },
     matchWinner: room.matchWinner ?? undefined,
     result: room.phase === RoomPhase.RESULTS && currentWord && room.matchWinner
       ? {
           matchNumber: room.matchNumber,
+          isVoteTie: currentMatchResult?.isVoteTie ?? false,
           impostorNames: room.players
             .filter((player) => player.role === PlayerRole.IMPOSTOR)
             .map((player) => player.name),
@@ -751,7 +750,7 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
           impostorWord: currentWord.impostorWord,
           voteResults: buildVoteResults(
             room.players,
-            room.votes.filter((vote) => vote.matchNumber === room.matchNumber),
+            currentMatchVotes,
           ),
         }
       : undefined,

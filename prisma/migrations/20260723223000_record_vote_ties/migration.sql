@@ -1,0 +1,2 @@
+ALTER TABLE "MatchResult"
+ADD COLUMN "isVoteTie" BOOLEAN NOT NULL DEFAULT false;

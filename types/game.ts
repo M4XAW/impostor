@@ -38,10 +38,11 @@ export interface GameState {
     matchNumber: number;
     clueRoundNumber: number;
   }>;
-  votes: Array<{ voterPublicId: string; voterName: string; targetPublicId: string; targetName: string }>;
+  voteProgress: { submittedCount: number; requiredCount: number };
   matchWinner?: WinnerTeam;
   result?: {
     matchNumber: number;
+    isVoteTie: boolean;
     impostorNames: string[];
     civilianWord: string;
     impostorWord: string;

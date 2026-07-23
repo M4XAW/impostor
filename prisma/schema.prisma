@@ -139,6 +139,7 @@ model MatchResult {
   id            String              @id @default(cuid())
   matchNumber   Int
   winner        WinnerTeam
+  isVoteTie     Boolean             @default(false)
   civilianWord  String
   impostorWord  String
   createdAt     DateTime            @default(now())

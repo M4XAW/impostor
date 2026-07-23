@@ -434,6 +434,11 @@ export function RoomClient({ code }: RoomClientProps) {
                                     </div>
                                 </dl>
                                 <VoteResults results={game.result.voteResults} />
+                                {game.result.isVoteTie && (
+                                    <p className="mt-4 border border-orange-400/30 bg-orange-400/10 p-3 text-sm text-orange-200">
+                                        Égalité : aucun imposteur n’a été formellement identifié.
+                                    </p>
+                                )}
                                 {hasNextWord && !isHost && (
                                     <p className="mt-4 text-sm text-muted-foreground" role="status">
                                         En attente de l’hôte pour lancer la manche suivante.
@@ -625,24 +630,10 @@ export function RoomClient({ code }: RoomClientProps) {
 
                         {game.phase === "VOTING" && (
                             <div className="mt-6">
-                                <h2>Votes visibles</h2>
-                                {game.votes.length === 0 ? (
-                                    <p className="mt-2 text-sm text-muted-foreground">
-                                        Aucun vote pour le moment.
-                                    </p>
-                                ) : (
-                                    <ul className="mt-2 space-y-2">
-                                        {game.votes.map((vote) => (
-                                            <li
-                                                key={`${vote.voterPublicId}-${vote.targetPublicId}`}
-                                                className="bg-muted px-4 py-2 text-sm"
-                                            >
-                                                <strong>{vote.voterName}</strong> a voté pour{" "}
-                                                <strong>{vote.targetName}</strong>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
+                                <h2>Votes anonymes</h2>
+                                <p className="mt-2 text-sm text-muted-foreground" role="status">
+                                    {game.voteProgress.submittedCount} / {game.voteProgress.requiredCount} votes enregistrés
+                                </p>
                             </div>
                         )}
 
