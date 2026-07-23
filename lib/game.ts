@@ -5,15 +5,14 @@ import { PublicError } from "@/lib/errors";
 import { assertGamePhaseTransition } from "@/lib/game-phase";
 import {
   shouldEndGameAfterDeparture,
-  shouldPreservePlayerAfterDeparture,
 } from "@/lib/player-departure";
 import { hasMinimumConnectedPlayers } from "@/lib/player-presence";
 import { prisma } from "@/lib/prisma";
 import { selectImpostorPlayerIds } from "@/lib/role-assignment";
+import { buildSeriesSummary } from "@/lib/series-summary";
 import type { PlayerSessionCredential } from "@/lib/session-token";
 import { getNextTurnProgress } from "@/lib/turn-progress";
 import { determineVoteOutcome } from "@/lib/vote-outcome";
-import { buildVoteResults } from "@/lib/vote-results";
 import type { GameState } from "@/types/game";
 
 const MAX_ROOM_CODE_ATTEMPTS = 5;
@@ -206,14 +205,6 @@ export async function removePlayer(code: string, playerId: string) {
     const departingPlayerIndex = room?.players.findIndex((player) => player.id === playerId) ?? -1;
 
     if (!room || departingPlayerIndex < 0) return false;
-    if (shouldPreservePlayerAfterDeparture(
-      room.phase,
-      room.matchNumber >= room.matchCount,
-      room.matchWinner !== null,
-    )) {
-      return false;
-    }
-
     const departingPlayer = room.players[departingPlayerIndex];
     const remainingPlayers = room.players.filter((player) => player.id !== playerId);
 
@@ -569,6 +560,50 @@ export async function startNextMatch(code: string, playerId: string) {
   });
 }
 
+export async function restartSeries(code: string, playerId: string) {
+  await runSerializable(async (transaction) => {
+    const room = await transaction.room.findUnique({
+      where: { code },
+      include: { players: true, matchResults: true },
+    });
+
+    if (!room || !isHost(room, playerId)) {
+      throw new PublicError("Action non autorisée.", 403);
+    }
+    if (
+      room.phase !== RoomPhase.RESULTS ||
+      room.matchNumber < room.matchCount ||
+      room.matchResults.length < room.matchCount
+    ) {
+      throw new PublicError("Terminez toutes les manches avant de proposer une revanche.", 409);
+    }
+    if (room.players.length < 3) {
+      throw new PublicError("Il faut au moins trois joueurs pour rejouer.", 409);
+    }
+
+    assertGamePhaseTransition(room.phase, RoomPhase.LOBBY);
+    await transaction.matchResult.deleteMany({ where: { roomId: room.id } });
+    await transaction.vote.deleteMany({ where: { roomId: room.id } });
+    await transaction.clue.deleteMany({ where: { roomId: room.id } });
+    await transaction.matchWord.deleteMany({ where: { roomId: room.id } });
+    await transaction.player.updateMany({
+      where: { roomId: room.id },
+      data: { role: PlayerRole.CIVILIAN, isReady: false },
+    });
+    await transaction.room.update({
+      where: { id: room.id },
+      data: {
+        phase: RoomPhase.LOBBY,
+        matchWinner: null,
+        matchNumber: 1,
+        clueRoundNumber: 1,
+        currentPlayerIndex: 0,
+        turnEndsAt: null,
+      },
+    });
+  });
+}
+
 async function finalizeVoteIfComplete(
   transaction: Prisma.TransactionClient,
   room: { id: string; phase: RoomPhase; matchNumber: number },
@@ -669,7 +704,10 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
       votes: { include: { voter: true, target: true } },
       clues: { include: { player: true }, orderBy: { createdAt: "asc" } },
       matchWords: { orderBy: { matchNumber: "asc" } },
-      matchResults: true,
+      matchResults: {
+        include: { playerResults: true },
+        orderBy: { matchNumber: "asc" },
+      },
     },
   });
   const currentPlayer = room?.players.find((player) => player.id === playerId);
@@ -677,9 +715,6 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
 
   const currentTurnPlayer = room.players[room.currentPlayerIndex];
   const currentWord = room.matchWords.find((word) => word.matchNumber === room.matchNumber);
-  const currentMatchResult = room.matchResults.find(
-    (matchResult) => matchResult.matchNumber === room.matchNumber,
-  );
   const showAllMatches = room.phase === RoomPhase.RESULTS &&
     (!room.matchWinner || room.matchNumber >= room.matchCount);
   const visibleClues = selectVisibleMatchItems(
@@ -690,6 +725,13 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
   const currentMatchVotes = room.votes.filter(
     (vote) => vote.matchNumber === room.matchNumber,
   );
+  const seriesSummary = buildSeriesSummary(room.matchResults);
+  const currentMatchSummary = seriesSummary.matches.find(
+    (matchSummary) => matchSummary.matchNumber === room.matchNumber,
+  );
+  const isSeriesComplete = room.phase === RoomPhase.RESULTS &&
+    room.matchNumber >= room.matchCount &&
+    room.matchResults.length >= room.matchCount;
 
   return {
     code: room.code,
@@ -739,21 +781,17 @@ export async function getSnapshot(code: string, playerId: string): Promise<GameS
       requiredCount: room.players.length,
     },
     matchWinner: room.matchWinner ?? undefined,
-    result: room.phase === RoomPhase.RESULTS && currentWord && room.matchWinner
+    result: room.phase === RoomPhase.RESULTS && currentMatchSummary && room.matchWinner
       ? {
-          matchNumber: room.matchNumber,
-          isVoteTie: currentMatchResult?.isVoteTie ?? false,
-          impostorNames: room.players
-            .filter((player) => player.role === PlayerRole.IMPOSTOR)
-            .map((player) => player.name),
-          civilianWord: currentWord.civilianWord,
-          impostorWord: currentWord.impostorWord,
-          voteResults: buildVoteResults(
-            room.players,
-            currentMatchVotes,
-          ),
+          matchNumber: currentMatchSummary.matchNumber,
+          isVoteTie: currentMatchSummary.isVoteTie,
+          impostorNames: currentMatchSummary.impostorNames,
+          civilianWord: currentMatchSummary.civilianWord,
+          impostorWord: currentMatchSummary.impostorWord,
+          voteResults: currentMatchSummary.voteResults,
         }
       : undefined,
+    seriesSummary: isSeriesComplete ? seriesSummary : undefined,
     endReason: room.phase === RoomPhase.RESULTS && !room.matchWinner ? "NOT_ENOUGH_PLAYERS" : undefined,
   };
 }

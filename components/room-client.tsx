@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 import { FullScreenLoader } from "@/components/full-screen-loader";
+import { FinalSummary } from "@/components/final-summary";
 import { GameRulesDialog } from "@/components/game-rules-dialog";
 import { LeaveRoomDialog } from "@/components/leave-room-dialog";
 import { RoundGrid } from "@/components/round-grid";
@@ -393,13 +394,15 @@ export function RoomClient({ code }: RoomClientProps) {
                                 : game.phase === "DISCUSSION"
                                     ? `Ton mot : ${game.currentPlayer.word ?? "?"}`
                                     : game.phase === "RESULTS"
-                                        ? game.endReason === "NOT_ENOUGH_PLAYERS"
+                                        ? game.seriesSummary
                                             ? "Partie terminée"
-                                            : game.matchWinner === "CIVILIANS"
-                                                ? "Les civils gagnent la manche"
-                                                : game.settings.impostorCount > 1
-                                                    ? "Les imposteurs gagnent la manche"
-                                                    : "L’imposteur gagne la manche"
+                                            : game.endReason === "NOT_ENOUGH_PLAYERS"
+                                                ? "Partie terminée"
+                                                : game.matchWinner === "CIVILIANS"
+                                                    ? "Les civils gagnent la manche"
+                                                    : game.settings.impostorCount > 1
+                                                        ? "Les imposteurs gagnent la manche"
+                                                        : "L’imposteur gagne la manche"
                                         : "Qui est l’imposteur ?"}
                         </h1>
 
@@ -407,7 +410,15 @@ export function RoomClient({ code }: RoomClientProps) {
                             <p className="mt-2 text-sm text-muted-foreground" role="status">{game.players.length} / {MAX_PLAYERS}</p>
                         )}
 
-                        {game.phase === "RESULTS" && game.result && (
+                        {game.phase === "RESULTS" && game.seriesSummary && (
+                            <FinalSummary
+                                summary={game.seriesSummary}
+                                isHost={isHost}
+                                onRematch={() => void play({ action: "rematch" })}
+                            />
+                        )}
+
+                        {game.phase === "RESULTS" && game.result && !game.seriesSummary && (
                             <>
                                 <dl className="mt-6 grid gap-3 border bg-muted/40 p-4 sm:grid-cols-3">
                                     <div>
@@ -594,7 +605,7 @@ export function RoomClient({ code }: RoomClientProps) {
                             </Alert>
                         )}
 
-                        {game.phase !== "LOBBY" && (
+                        {game.phase !== "LOBBY" && !game.seriesSummary && (
                             <RoundGrid game={game} connectedPlayerPublicIds={connectedPlayerPublicIds} />
                         )}
 

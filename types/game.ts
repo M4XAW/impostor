@@ -13,6 +13,37 @@ export interface VoteResult {
   isMostVoted: boolean;
 }
 
+export interface MatchSummary {
+  matchNumber: number;
+  winner: WinnerTeam;
+  isVoteTie: boolean;
+  civilianWord: string;
+  impostorWord: string;
+  impostorNames: string[];
+  voteResults: VoteResult[];
+}
+
+export interface PlayerSeriesScore {
+  playerPublicId: string;
+  playerName: string;
+  matchWins: number;
+}
+
+export interface SeriesAward {
+  playerNames: string[];
+  value: number;
+}
+
+export interface SeriesSummary {
+  globalWinner: WinnerTeam | "DRAW";
+  civilianMatchWins: number;
+  impostorMatchWins: number;
+  playerScores: PlayerSeriesScore[];
+  bestDetective?: SeriesAward;
+  stealthiestImpostor?: SeriesAward;
+  matches: MatchSummary[];
+}
+
 export interface GameState {
   code: string;
   phase: GamePhase;
@@ -48,6 +79,7 @@ export interface GameState {
     impostorWord: string;
     voteResults: VoteResult[];
   };
+  seriesSummary?: SeriesSummary;
   endReason?: "NOT_ENOUGH_PLAYERS";
 }
 
