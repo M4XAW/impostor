@@ -9,6 +9,7 @@ import {
 } from "@/lib/player-departure";
 import { hasMinimumConnectedPlayers } from "@/lib/player-presence";
 import { prisma } from "@/lib/prisma";
+import { selectImpostorPlayerIds } from "@/lib/role-assignment";
 import type { PlayerSessionCredential } from "@/lib/session-token";
 import { getNextTurnProgress } from "@/lib/turn-progress";
 import { buildVoteResults } from "@/lib/vote-results";
@@ -329,6 +330,27 @@ export async function kickPlayer(code: string, hostId: string, targetPlayerPubli
   });
 }
 
+async function assignMatchRoles(
+  transaction: Prisma.TransactionClient,
+  roomId: string,
+  players: readonly { id: string }[],
+  impostorCount: number,
+) {
+  const impostorPlayerIds = selectImpostorPlayerIds(
+    players.map((player) => player.id),
+    impostorCount,
+  );
+
+  await transaction.player.updateMany({
+    where: { roomId },
+    data: { role: PlayerRole.CIVILIAN },
+  });
+  await transaction.player.updateMany({
+    where: { id: { in: impostorPlayerIds }, roomId },
+    data: { role: PlayerRole.IMPOSTOR },
+  });
+}
+
 export async function startGame(code: string, playerId: string) {
   await runSerializable(async (transaction) => {
     const room = await transaction.room.findUnique({
@@ -356,17 +378,9 @@ export async function startGame(code: string, playerId: string) {
     }
 
     const selectedWordPairs = shuffle(availableWordPairs).slice(0, room.matchCount);
-    const impostors = shuffle(room.players).slice(0, room.impostorCount);
     const turnEndsAt = new Date(Date.now() + room.turnSeconds * 1000);
 
-    await transaction.player.updateMany({
-      where: { roomId: room.id },
-      data: { role: PlayerRole.CIVILIAN },
-    });
-    await Promise.all(impostors.map((player) => transaction.player.update({
-      where: { id: player.id },
-      data: { role: PlayerRole.IMPOSTOR },
-    })));
+    await assignMatchRoles(transaction, room.id, room.players, room.impostorCount);
     await transaction.matchWord.createMany({
       data: selectedWordPairs.map((wordPair, index) => {
         const reverseWords = randomInt(2) === 1;
@@ -538,6 +552,7 @@ export async function startNextMatch(code: string, playerId: string) {
       throw new PublicError("Il faut au moins trois joueurs pour continuer.", 409);
     }
 
+    await assignMatchRoles(transaction, room.id, room.players, room.impostorCount);
     assertGamePhaseTransition(room.phase, RoomPhase.DISCUSSION);
     await transaction.room.update({
       where: { id: room.id },
