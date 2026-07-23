@@ -11,8 +11,6 @@ import { Card, CardContent, CardHeader } from "./ui/card";
 
 import { Loader } from 'pixelarticons/react'
 
-import { toast } from "sonner";
-
 type EntryMode = "create" | "join";
 
 interface GameEntryProps {
@@ -85,9 +83,6 @@ export function GameEntry({ joinCode }: GameEntryProps) {
                 </div>
             </CardHeader>
             <CardContent>
-                <Button variant="outline" onClick={() => toast("Event has been created", { duration: 1000000 })}>
-                    Default
-                </Button>
                 <form className="space-y-5" onSubmit={handleSubmit}>
                     <FieldGroup>
                         <Field>
