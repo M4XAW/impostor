@@ -1,35 +1,35 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRoundRows, hasPlayerTurnElapsed } from "@/lib/round-rows";
+import { buildClueRoundRows, hasPlayerTurnElapsed } from "@/lib/round-rows";
 
 const clues = [
-  { wordNumber: 2, roundNumber: 1 },
-  { wordNumber: 2, roundNumber: 2 },
+  { matchNumber: 2, clueRoundNumber: 1 },
+  { matchNumber: 2, clueRoundNumber: 2 },
 ];
 
 test("voting displays every round like the result summary", () => {
   const expectedRows = [
-    { wordNumber: 2, roundNumber: 1 },
-    { wordNumber: 2, roundNumber: 2 },
-    { wordNumber: 2, roundNumber: 3 },
+    { matchNumber: 2, clueRoundNumber: 1 },
+    { matchNumber: 2, clueRoundNumber: 2 },
+    { matchNumber: 2, clueRoundNumber: 3 },
   ];
 
   assert.deepEqual(
-    buildRoundRows({
+    buildClueRoundRows({
       clues,
       phase: "VOTING",
-      roundCount: 3,
-      showAllWords: false,
+      clueRoundCount: 3,
+      showAllMatches: false,
     }),
     expectedRows,
   );
   assert.deepEqual(
-    buildRoundRows({
+    buildClueRoundRows({
       clues,
       phase: "RESULTS",
-      roundCount: 3,
-      showAllWords: false,
-      resultWordNumber: 2,
+      clueRoundCount: 3,
+      showAllMatches: false,
+      resultMatchNumber: 2,
     }),
     expectedRows,
   );
@@ -37,40 +37,40 @@ test("voting displays every round like the result summary", () => {
 
 test("discussion only displays reached rounds and the active round", () => {
   assert.deepEqual(
-    buildRoundRows({
+    buildClueRoundRows({
       clues: clues.slice(0, 1),
       phase: "DISCUSSION",
-      roundCount: 3,
-      showAllWords: false,
-      turn: { wordNumber: 2, roundNumber: 2 },
+      clueRoundCount: 3,
+      showAllMatches: false,
+      turn: { matchNumber: 2, clueRoundNumber: 2 },
     }),
     clues,
   );
 });
 
-test("the final game summary contains every round grouped by word", () => {
+test("the final game summary contains every clue round grouped by match", () => {
   assert.deepEqual(
-    buildRoundRows({
+    buildClueRoundRows({
       clues: [
-        { wordNumber: 1, roundNumber: 1 },
-        { wordNumber: 2, roundNumber: 1 },
+        { matchNumber: 1, clueRoundNumber: 1 },
+        { matchNumber: 2, clueRoundNumber: 1 },
       ],
       phase: "RESULTS",
-      roundCount: 2,
-      showAllWords: true,
-      resultWordNumber: 2,
+      clueRoundCount: 2,
+      showAllMatches: true,
+      resultMatchNumber: 2,
     }),
     [
-      { wordNumber: 1, roundNumber: 1 },
-      { wordNumber: 1, roundNumber: 2 },
-      { wordNumber: 2, roundNumber: 1 },
-      { wordNumber: 2, roundNumber: 2 },
+      { matchNumber: 1, clueRoundNumber: 1 },
+      { matchNumber: 1, clueRoundNumber: 2 },
+      { matchNumber: 2, clueRoundNumber: 1 },
+      { matchNumber: 2, clueRoundNumber: 2 },
     ],
   );
 });
 
 test("only elapsed turns display a missing clue during discussion", () => {
-  const turn = { wordNumber: 1, roundNumber: 1 };
+  const turn = { matchNumber: 1, clueRoundNumber: 1 };
 
   assert.equal(hasPlayerTurnElapsed({
     phase: "DISCUSSION",
@@ -98,14 +98,14 @@ test("only elapsed turns display a missing clue during discussion", () => {
 test("missing clues are expired in completed rounds and result screens", () => {
   assert.equal(hasPlayerTurnElapsed({
     phase: "DISCUSSION",
-    row: { wordNumber: 1, roundNumber: 1 },
-    turn: { wordNumber: 1, roundNumber: 2 },
+    row: { matchNumber: 1, clueRoundNumber: 1 },
+    turn: { matchNumber: 1, clueRoundNumber: 2 },
     playerIndex: 2,
     currentPlayerIndex: 0,
   }), true);
   assert.equal(hasPlayerTurnElapsed({
     phase: "RESULTS",
-    row: { wordNumber: 1, roundNumber: 1 },
+    row: { matchNumber: 1, clueRoundNumber: 1 },
     playerIndex: 2,
     currentPlayerIndex: -1,
   }), true);

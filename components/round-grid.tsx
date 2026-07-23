@@ -1,5 +1,5 @@
 import type { GameSnapshot } from "@/types/game";
-import { buildRoundRows, hasPlayerTurnElapsed } from "@/lib/round-rows";
+import { buildClueRoundRows, hasPlayerTurnElapsed } from "@/lib/round-rows";
 import { AvatarCircle } from "pixelarticons/react/AvatarCircle";
 import { Fragment } from "react";
 
@@ -9,17 +9,17 @@ interface RoundGridProps {
 }
 
 export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
-    const showAllWords = game.phase === "RESULTS" && (
+    const showAllMatches = game.phase === "RESULTS" && (
         game.endReason === "NOT_ENOUGH_PLAYERS" ||
-        game.result?.wordNumber === game.settings.wordCount
+        game.result?.matchNumber === game.settings.matchCount
     );
-    const rounds = buildRoundRows({
+    const rounds = buildClueRoundRows({
         clues: game.clues,
         phase: game.phase,
-        roundCount: game.settings.roundCount,
-        showAllWords,
+        clueRoundCount: game.settings.clueRoundCount,
+        showAllMatches,
         turn: game.turn,
-        resultWordNumber: game.result?.wordNumber,
+        resultMatchNumber: game.result?.matchNumber,
     });
     const currentPlayerIndex = game.players.findIndex(
         (player) => player.publicId === game.turn?.currentPlayerPublicId,
@@ -61,14 +61,14 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                 </thead>
                 <tbody>
                     {rounds.map((round, index) => (
-                        <Fragment key={`${round.wordNumber}-${round.roundNumber}`}>
-                            {showAllWords && rounds[index - 1]?.wordNumber !== round.wordNumber && (
+                        <Fragment key={`${round.matchNumber}-${round.clueRoundNumber}`}>
+                            {showAllMatches && rounds[index - 1]?.matchNumber !== round.matchNumber && (
                                 <tr>
                                     <th
                                         colSpan={game.players.length + 1}
                                         className="border-x border-b bg-muted px-3 py-2 font-medium"
                                     >
-                                        Manche {round.wordNumber}
+                                        Manche {round.matchNumber}
                                     </th>
                                 </tr>
                             )}
@@ -78,21 +78,21 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                                     className="border-x border-b bg-muted/20 px-3 py-2 font-normal"
                                 >
                                     <span className="block text-xs text-muted-foreground">
-                                        Tour {round.roundNumber}
+                                        Tour d’indices {round.clueRoundNumber}
                                     </span>
                                 </th>
                                 {game.players.map((player, playerIndex) => {
                                     const clue = game.clues.find(
                                         (item) =>
                                             item.playerPublicId === player.publicId &&
-                                            item.wordNumber === round.wordNumber &&
-                                            item.roundNumber === round.roundNumber,
+                                            item.matchNumber === round.matchNumber &&
+                                            item.clueRoundNumber === round.clueRoundNumber,
                                     );
 
                                     const isActive =
                                         game.turn?.currentPlayerPublicId === player.publicId &&
-                                        game.turn.wordNumber === round.wordNumber &&
-                                        game.turn.roundNumber === round.roundNumber;
+                                        game.turn.matchNumber === round.matchNumber &&
+                                        game.turn.clueRoundNumber === round.clueRoundNumber;
                                     const hasTurnElapsed = hasPlayerTurnElapsed({
                                         phase: game.phase,
                                         row: round,

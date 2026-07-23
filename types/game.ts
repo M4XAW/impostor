@@ -1,4 +1,5 @@
 export type GamePhase = "LOBBY" | "DISCUSSION" | "VOTING" | "RESULTS";
+export type WinnerTeam = "CIVILIANS" | "IMPOSTORS";
 
 export interface ServerTiming {
   receivedAt: number;
@@ -15,15 +16,32 @@ export interface VoteResult {
 export interface GameState {
   code: string;
   phase: GamePhase;
-  settings: { wordCount: number; roundCount: number; turnSeconds: number; impostorCount: number };
-  turn?: { wordNumber: number; roundNumber: number; currentPlayerPublicId: string; endsAt: string; canStartVote: boolean };
+  settings: {
+    matchCount: number;
+    clueRoundCount: number;
+    turnSeconds: number;
+    impostorCount: number;
+  };
+  turn?: {
+    matchNumber: number;
+    clueRoundNumber: number;
+    currentPlayerPublicId: string;
+    endsAt: string;
+    canStartVote: boolean;
+  };
   players: Array<{ publicId: string; name: string; isSelf: boolean; isHost: boolean; hasVoted: boolean }>;
   currentPlayer: { name: string; isHost: boolean; word?: string };
-  clues: Array<{ playerPublicId: string; content: string; playerName: string; wordNumber: number; roundNumber: number }>;
+  clues: Array<{
+    playerPublicId: string;
+    content: string;
+    playerName: string;
+    matchNumber: number;
+    clueRoundNumber: number;
+  }>;
   votes: Array<{ voterPublicId: string; voterName: string; targetPublicId: string; targetName: string }>;
-  winner?: "CIVILIANS" | "IMPOSTOR";
+  matchWinner?: WinnerTeam;
   result?: {
-    wordNumber: number;
+    matchNumber: number;
     impostorNames: string[];
     civilianWord: string;
     impostorWord: string;

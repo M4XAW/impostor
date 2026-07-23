@@ -1,9 +1,9 @@
 interface TurnProgressInput {
   currentPlayerIndex: number;
   playerCount: number;
-  roundNumber: number;
-  roundCount: number;
-  wordNumber: number;
+  clueRoundNumber: number;
+  clueRoundCount: number;
+  matchNumber: number;
 }
 
 export type NextTurnProgress =
@@ -11,16 +11,16 @@ export type NextTurnProgress =
   | {
       phase: "DISCUSSION";
       currentPlayerIndex: number;
-      roundNumber: number;
-      wordNumber: number;
+      clueRoundNumber: number;
+      matchNumber: number;
     };
 
 export function getNextTurnProgress({
   currentPlayerIndex,
   playerCount,
-  roundNumber,
-  roundCount,
-  wordNumber,
+  clueRoundNumber,
+  clueRoundCount,
+  matchNumber,
 }: TurnProgressInput): NextTurnProgress {
   const isLastPlayer = currentPlayerIndex + 1 >= playerCount;
 
@@ -28,19 +28,19 @@ export function getNextTurnProgress({
     return {
       phase: "DISCUSSION",
       currentPlayerIndex: currentPlayerIndex + 1,
-      roundNumber,
-      wordNumber,
+      clueRoundNumber,
+      matchNumber,
     };
   }
 
-  const isLastRound = roundNumber >= roundCount;
+  const isLastRound = clueRoundNumber >= clueRoundCount;
 
   if (!isLastRound) {
     return {
       phase: "DISCUSSION",
       currentPlayerIndex: 0,
-      roundNumber: roundNumber + 1,
-      wordNumber,
+      clueRoundNumber: clueRoundNumber + 1,
+      matchNumber,
     };
   }
 

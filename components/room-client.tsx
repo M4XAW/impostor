@@ -67,8 +67,8 @@ const settingFields: Array<{
     min: number;
     max: number;
 }> = [
-        { name: "wordCount", label: "Nombre de manches", min: 1, max: 20 },
-        { name: "roundCount", label: "Tours par mot", min: 1, max: 10 },
+        { name: "matchCount", label: "Nombre de manches", min: 1, max: 20 },
+        { name: "clueRoundCount", label: "Tours d’indices par manche", min: 1, max: 10 },
         { name: "turnSeconds", label: "Secondes par tour", min: 10, max: 120 },
         { name: "impostorCount", label: "Imposteurs", min: 1, max: 3 },
     ];
@@ -116,7 +116,7 @@ export function RoomClient({ code }: RoomClientProps) {
     const turnSound = useRef<HTMLAudioElement | null>(null);
     const turnEndsAt = game?.turn?.endsAt;
     const activeTurnKey = game?.turn
-        ? `${game.turn.wordNumber}:${game.turn.roundNumber}:${game.turn.currentPlayerPublicId}`
+        ? `${game.turn.matchNumber}:${game.turn.clueRoundNumber}:${game.turn.currentPlayerPublicId}`
         : null;
 
     useEffect(() => {
@@ -352,7 +352,7 @@ export function RoomClient({ code }: RoomClientProps) {
     const canBeginVote = game.phase === "DISCUSSION" && isHost && game.turn?.canStartVote === true;
     const hasNextWord = game.phase === "RESULTS" &&
         game.result !== undefined &&
-        game.result.wordNumber < game.settings.wordCount;
+        game.result.matchNumber < game.settings.matchCount;
     const canStartNextWord = hasNextWord && isHost;
     const hasCurrentPlayerVoted = game.players.some(
         (player) => player.isSelf && player.hasVoted,
@@ -373,7 +373,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                         game.phase === "DISCUSSION" ? "Tour en cours"
                                             : game.phase === "VOTING" ? "Vote"
                                                 : game.result
-                                                    ? `Résultats · manche ${game.result.wordNumber}/${game.settings.wordCount}`
+                                                    ? `Résultats · manche ${game.result.matchNumber}/${game.settings.matchCount}`
                                                     : "Résultats"}
                                 </p>
                                 <Badge variant="secondary">{game.code}</Badge>
@@ -395,7 +395,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                     : game.phase === "RESULTS"
                                         ? game.endReason === "NOT_ENOUGH_PLAYERS"
                                             ? "Partie terminée"
-                                            : game.winner === "CIVILIANS"
+                                            : game.matchWinner === "CIVILIANS"
                                                 ? "Les civils gagnent la manche"
                                                 : game.settings.impostorCount > 1
                                                     ? "Les imposteurs gagnent la manche"
@@ -467,7 +467,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                         {canSubmitClue ? " — c’est toi" : ""}
                                     </p>
                                     <p className={`mt-1 text-sm ${isTurnEndingSoon ? "text-red-200/80" : "text-foreground"}`}>
-                                        Manche {game.turn.wordNumber}/{game.settings.wordCount} · tour {game.turn.roundNumber}/{game.settings.roundCount}
+                                        Manche {game.turn.matchNumber}/{game.settings.matchCount} · tour d’indices {game.turn.clueRoundNumber}/{game.settings.clueRoundCount}
                                     </p>
                                 </div>
                                 <TurnCountdown secondsLeft={secondsLeft} />
@@ -659,7 +659,7 @@ export function RoomClient({ code }: RoomClientProps) {
                                     Passer au vote
                                 </Button>
                             ) : (
-                                <Button onClick={() => void play({ action: "nextWord" })}>
+                                <Button onClick={() => void play({ action: "nextMatch" })}>
                                     Lancer la manche suivante
                                 </Button>
                             )}
@@ -711,7 +711,7 @@ export function RoomClient({ code }: RoomClientProps) {
 }
 
 function Settings({ game, isHost, onSave }: { game: GameSnapshot; isHost: boolean; onSave: (payload: Record<string, unknown>) => Promise<void> }) {
-    const settingsKey = `${game.settings.wordCount}-${game.settings.roundCount}-${game.settings.turnSeconds}-${game.settings.impostorCount}`;
+    const settingsKey = `${game.settings.matchCount}-${game.settings.clueRoundCount}-${game.settings.turnSeconds}-${game.settings.impostorCount}`;
     const latestSettings = useRef(game.settings);
     const saveQueue = useRef(Promise.resolve());
 

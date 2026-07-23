@@ -19,49 +19,55 @@ enum PlayerRole {
   IMPOSTOR
 }
 
+enum WinnerTeam {
+  CIVILIANS
+  IMPOSTORS
+}
+
 model Room {
-  id                 String     @id @default(cuid())
-  code               String     @unique
-  phase              RoomPhase  @default(LOBBY)
-  hostId             String?    @unique
-  wordCount          Int        @default(10)
-  roundCount         Int        @default(3)
-  turnSeconds        Int        @default(30)
-  impostorCount      Int        @default(1)
-  wordNumber         Int        @default(1)
-  roundNumber        Int        @default(1)
-  currentPlayerIndex Int        @default(0)
+  id                 String        @id @default(cuid())
+  code               String        @unique
+  phase              RoomPhase     @default(LOBBY)
+  hostId             String?       @unique
+  matchCount         Int           @default(10) @map("wordCount")
+  clueRoundCount     Int           @default(3) @map("roundCount")
+  turnSeconds        Int           @default(30)
+  impostorCount      Int           @default(1)
+  matchNumber        Int           @default(1) @map("wordNumber")
+  clueRoundNumber    Int           @default(1) @map("roundNumber")
+  currentPlayerIndex Int           @default(0)
   turnEndsAt         DateTime?
-  winner             String?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
-  host               Player?    @relation("RoomHost", fields: [hostId], references: [id], onDelete: SetNull)
-  players            Player[]   @relation("RoomPlayers")
+  matchWinner        WinnerTeam?   @map("winner")
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  host               Player?       @relation("RoomHost", fields: [hostId], references: [id], onDelete: SetNull)
+  players            Player[]      @relation("RoomPlayers")
   votes              Vote[]
   clues              Clue[]
-  words              RoomWord[]
+  matchWords         MatchWord[]
+  matchResults       MatchResult[]
 
   @@index([phase, turnEndsAt])
 }
 
 model WordPair {
-  id                     String     @id @default(cuid())
+  id                     String      @id @default(cuid())
   civilianWord           String
   impostorWord           String
   normalizedCivilianWord String
   normalizedImpostorWord String
-  isActive               Boolean    @default(true)
-  createdAt              DateTime   @default(now())
-  updatedAt              DateTime   @updatedAt
-  roomWords              RoomWord[]
+  isActive               Boolean     @default(true)
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+  matchWords             MatchWord[]
 
   @@unique([normalizedCivilianWord, normalizedImpostorWord])
   @@index([isActive])
 }
 
-model RoomWord {
+model MatchWord {
   id               String    @id @default(cuid())
-  wordNumber       Int
+  matchNumber      Int       @map("wordNumber")
   civilianWord     String
   impostorWord     String
   roomId           String
@@ -69,25 +75,26 @@ model RoomWord {
   room             Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
   sourceWordPair   WordPair? @relation(fields: [sourceWordPairId], references: [id], onDelete: SetNull)
 
-  @@unique([roomId, wordNumber])
+  @@unique([roomId, matchNumber])
   @@unique([roomId, sourceWordPairId])
   @@index([roomId])
+  @@map("RoomWord")
 }
 
 model Clue {
   id                String   @id @default(cuid())
   content           String
   normalizedContent String
-  wordNumber        Int
-  roundNumber       Int
+  matchNumber       Int      @map("wordNumber")
+  clueRoundNumber   Int      @map("roundNumber")
   createdAt         DateTime @default(now())
   roomId            String
   playerId          String
   room              Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
   player            Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
-  @@unique([roomId, playerId, wordNumber, roundNumber])
-  @@unique([roomId, wordNumber, normalizedContent])
+  @@unique([roomId, playerId, matchNumber, clueRoundNumber])
+  @@unique([roomId, matchNumber, normalizedContent])
   @@index([roomId])
 }
 
@@ -99,6 +106,7 @@ model Player {
   lastSeenAt       DateTime   @default(now())
   name             String
   role             PlayerRole @default(CIVILIAN)
+  isReady          Boolean    @default(false)
   createdAt        DateTime   @default(now())
   roomId           String
   room             Room       @relation("RoomPlayers", fields: [roomId], references: [id], onDelete: Cascade)
@@ -113,15 +121,46 @@ model Player {
 }
 
 model Vote {
-  id        String   @id @default(cuid())
-  roomId    String
-  voterId   String
-  targetId  String
-  createdAt DateTime @default(now())
-  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  voter     Player   @relation("Voter", fields: [voterId], references: [id], onDelete: Cascade)
-  target    Player   @relation("Target", fields: [targetId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  roomId      String
+  voterId     String
+  targetId    String
+  matchNumber Int      @default(1)
+  createdAt   DateTime @default(now())
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  voter       Player   @relation("Voter", fields: [voterId], references: [id], onDelete: Cascade)
+  target      Player   @relation("Target", fields: [targetId], references: [id], onDelete: Cascade)
 
-  @@unique([roomId, voterId])
+  @@unique([roomId, matchNumber, voterId])
   @@index([roomId])
+}
+
+model MatchResult {
+  id            String              @id @default(cuid())
+  matchNumber   Int
+  winner        WinnerTeam
+  civilianWord  String
+  impostorWord  String
+  createdAt     DateTime            @default(now())
+  roomId        String
+  room          Room                @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  playerResults MatchPlayerResult[]
+
+  @@unique([roomId, matchNumber])
+  @@index([roomId])
+}
+
+model MatchPlayerResult {
+  id                String      @id @default(cuid())
+  playerPublicId    String
+  playerName        String
+  role              PlayerRole
+  receivedVoteCount Int
+  votedForImpostor  Boolean
+  isMatchWinner     Boolean
+  matchResultId     String
+  matchResult       MatchResult @relation(fields: [matchResultId], references: [id], onDelete: Cascade)
+
+  @@unique([matchResultId, playerPublicId])
+  @@index([matchResultId])
 }

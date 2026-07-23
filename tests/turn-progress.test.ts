@@ -7,15 +7,15 @@ test("the turn moves to the next player during a round", () => {
     getNextTurnProgress({
       currentPlayerIndex: 0,
       playerCount: 3,
-      roundNumber: 1,
-      roundCount: 2,
-      wordNumber: 1,
+      clueRoundNumber: 1,
+      clueRoundCount: 2,
+      matchNumber: 1,
     }),
     {
       phase: "DISCUSSION",
       currentPlayerIndex: 1,
-      roundNumber: 1,
-      wordNumber: 1,
+      clueRoundNumber: 1,
+      matchNumber: 1,
     },
   );
 });
@@ -25,55 +25,55 @@ test("the last player starts the next configured round", () => {
     getNextTurnProgress({
       currentPlayerIndex: 2,
       playerCount: 3,
-      roundNumber: 1,
-      roundCount: 2,
-      wordNumber: 1,
+      clueRoundNumber: 1,
+      clueRoundCount: 2,
+      matchNumber: 1,
     }),
     {
       phase: "DISCUSSION",
       currentPlayerIndex: 0,
-      roundNumber: 2,
-      wordNumber: 1,
+      clueRoundNumber: 2,
+      matchNumber: 1,
     },
   );
 });
 
-test("voting starts after all configured rounds even when more words remain", () => {
+test("voting starts after all configured clue rounds even when more matches remain", () => {
   assert.deepEqual(
     getNextTurnProgress({
       currentPlayerIndex: 2,
       playerCount: 3,
-      roundNumber: 2,
-      roundCount: 2,
-      wordNumber: 1,
+      clueRoundNumber: 2,
+      clueRoundCount: 2,
+      matchNumber: 1,
     }),
     { phase: "VOTING" },
   );
 });
 
-test("the same word remains active throughout three configured rounds", () => {
+test("the same match remains active throughout three configured clue rounds", () => {
   const playerCount = 3;
-  const roundCount = 3;
+  const clueRoundCount = 3;
   const activeWordNumbers: number[] = [];
   let currentTurn = {
     phase: "DISCUSSION" as const,
     currentPlayerIndex: 0,
-    roundNumber: 1,
-    wordNumber: 1,
+    clueRoundNumber: 1,
+    matchNumber: 1,
   };
 
-  for (let turnNumber = 0; turnNumber < playerCount * roundCount; turnNumber += 1) {
-    activeWordNumbers.push(currentTurn.wordNumber);
+  for (let turnNumber = 0; turnNumber < playerCount * clueRoundCount; turnNumber += 1) {
+    activeWordNumbers.push(currentTurn.matchNumber);
 
     const nextTurn = getNextTurnProgress({
       currentPlayerIndex: currentTurn.currentPlayerIndex,
       playerCount,
-      roundNumber: currentTurn.roundNumber,
-      roundCount,
-      wordNumber: currentTurn.wordNumber,
+      clueRoundNumber: currentTurn.clueRoundNumber,
+      clueRoundCount,
+      matchNumber: currentTurn.matchNumber,
     });
 
-    if (turnNumber < playerCount * roundCount - 1) {
+    if (turnNumber < playerCount * clueRoundCount - 1) {
       assert.equal(nextTurn.phase, "DISCUSSION");
       if (nextTurn.phase === "DISCUSSION") currentTurn = nextTurn;
     } else {
@@ -89,9 +89,9 @@ test("voting starts after the final configured turn", () => {
     getNextTurnProgress({
       currentPlayerIndex: 2,
       playerCount: 3,
-      roundNumber: 2,
-      roundCount: 2,
-      wordNumber: 2,
+      clueRoundNumber: 2,
+      clueRoundCount: 2,
+      matchNumber: 2,
     }),
     { phase: "VOTING" },
   );

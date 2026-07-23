@@ -1,23 +1,23 @@
 import type { GamePhase } from "@/types/game";
 
-export interface RoundRow {
-  wordNumber: number;
-  roundNumber: number;
+export interface ClueRoundRow {
+  matchNumber: number;
+  clueRoundNumber: number;
 }
 
-interface BuildRoundRowsOptions {
-  clues: readonly RoundRow[];
+interface BuildClueRoundRowsOptions {
+  clues: readonly ClueRoundRow[];
   phase: GamePhase;
-  roundCount: number;
-  showAllWords: boolean;
-  turn?: RoundRow;
-  resultWordNumber?: number;
+  clueRoundCount: number;
+  showAllMatches: boolean;
+  turn?: ClueRoundRow;
+  resultMatchNumber?: number;
 }
 
 interface HasPlayerTurnElapsedOptions {
   phase: GamePhase;
-  row: RoundRow;
-  turn?: RoundRow;
+  row: ClueRoundRow;
+  turn?: ClueRoundRow;
   playerIndex: number;
   currentPlayerIndex: number;
 }
@@ -32,49 +32,49 @@ export function hasPlayerTurnElapsed({
   if (phase === "VOTING" || phase === "RESULTS") return true;
   if (phase !== "DISCUSSION" || !turn) return false;
 
-  if (row.wordNumber !== turn.wordNumber) {
-    return row.wordNumber < turn.wordNumber;
+  if (row.matchNumber !== turn.matchNumber) {
+    return row.matchNumber < turn.matchNumber;
   }
-  if (row.roundNumber !== turn.roundNumber) {
-    return row.roundNumber < turn.roundNumber;
+  if (row.clueRoundNumber !== turn.clueRoundNumber) {
+    return row.clueRoundNumber < turn.clueRoundNumber;
   }
 
   return playerIndex < currentPlayerIndex;
 }
 
-export function buildRoundRows({
+export function buildClueRoundRows({
   clues,
   phase,
-  roundCount,
-  showAllWords,
+  clueRoundCount,
+  showAllMatches,
   turn,
-  resultWordNumber,
-}: BuildRoundRowsOptions): RoundRow[] {
-  const rowMap = new Map<string, RoundRow>();
+  resultMatchNumber,
+}: BuildClueRoundRowsOptions): ClueRoundRow[] {
+  const rowMap = new Map<string, ClueRoundRow>();
 
   clues.forEach((clue) => {
-    rowMap.set(`${clue.wordNumber}-${clue.roundNumber}`, {
-      wordNumber: clue.wordNumber,
-      roundNumber: clue.roundNumber,
+    rowMap.set(`${clue.matchNumber}-${clue.clueRoundNumber}`, {
+      matchNumber: clue.matchNumber,
+      clueRoundNumber: clue.clueRoundNumber,
     });
   });
 
   if (turn) {
-    rowMap.set(`${turn.wordNumber}-${turn.roundNumber}`, turn);
+    rowMap.set(`${turn.matchNumber}-${turn.clueRoundNumber}`, turn);
   }
 
-  const visibleWordNumbers = showAllWords
-    ? new Set(clues.map((clue) => clue.wordNumber))
-    : new Set([resultWordNumber ?? clues[0]?.wordNumber]);
+  const visibleMatchNumbers = showAllMatches
+    ? new Set(clues.map((clue) => clue.matchNumber))
+    : new Set([resultMatchNumber ?? clues[0]?.matchNumber]);
 
   if (phase === "VOTING" || phase === "RESULTS") {
-    visibleWordNumbers.forEach((wordNumber) => {
-      if (wordNumber === undefined) return;
+    visibleMatchNumbers.forEach((matchNumber) => {
+      if (matchNumber === undefined) return;
 
-      for (let roundNumber = 1; roundNumber <= roundCount; roundNumber += 1) {
-        rowMap.set(`${wordNumber}-${roundNumber}`, {
-          wordNumber,
-          roundNumber,
+      for (let clueRoundNumber = 1; clueRoundNumber <= clueRoundCount; clueRoundNumber += 1) {
+        rowMap.set(`${matchNumber}-${clueRoundNumber}`, {
+          matchNumber,
+          clueRoundNumber,
         });
       }
     });
@@ -82,7 +82,7 @@ export function buildRoundRows({
 
   return [...rowMap.values()].sort(
     (first, second) =>
-      first.wordNumber - second.wordNumber ||
-      first.roundNumber - second.roundNumber,
+      first.matchNumber - second.matchNumber ||
+      first.clueRoundNumber - second.clueRoundNumber,
   );
 }

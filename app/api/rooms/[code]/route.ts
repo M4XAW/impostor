@@ -8,7 +8,7 @@ import {
   kickPlayer,
   removePlayer,
   startGame,
-  startNextWord,
+  startNextMatch,
   submitClue,
   transferHost,
   updateSettings,
@@ -27,7 +27,7 @@ import type { GameSnapshot } from "@/types/game";
 
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("start") }),
-  z.object({ action: z.literal("nextWord") }),
+  z.object({ action: z.literal("nextMatch") }),
   z.object({ action: z.literal("beginVote") }),
   z.object({ action: z.literal("vote"), targetPublicId: z.string().uuid() }),
   z.object({ action: z.literal("transferHost"), targetPlayerPublicId: z.string().uuid() }),
@@ -39,8 +39,8 @@ const actionSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     action: z.literal("settings"),
-    wordCount: z.number().int().min(1).max(20),
-    roundCount: z.number().int().min(1).max(10),
+    matchCount: z.number().int().min(1).max(20),
+    clueRoundCount: z.number().int().min(1).max(10),
     turnSeconds: z.number().int().min(10).max(120),
     impostorCount: z.number().int().min(1).max(3),
   }),
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
     let playerActivity: PlayerActivityEvent | undefined;
 
     if (parsed.data.action === "start") await startGame(code, player.id);
-    if (parsed.data.action === "nextWord") await startNextWord(code, player.id);
+    if (parsed.data.action === "nextMatch") await startNextMatch(code, player.id);
     if (parsed.data.action === "beginVote") await beginVote(code, player.id);
     if (parsed.data.action === "vote") {
       await castVote(code, player.id, parsed.data.targetPublicId);
@@ -137,10 +137,10 @@ export async function POST(request: NextRequest, context: RouteContext<"/api/roo
       };
     }
     if (parsed.data.action === "settings") {
-      const { wordCount, roundCount, turnSeconds, impostorCount } = parsed.data;
+      const { matchCount, clueRoundCount, turnSeconds, impostorCount } = parsed.data;
       await updateSettings(code, player.id, {
-        wordCount,
-        roundCount,
+        matchCount,
+        clueRoundCount,
         turnSeconds,
         impostorCount,
       });
