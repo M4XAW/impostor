@@ -1,5 +1,5 @@
 import type { GameSnapshot } from "@/types/game";
-import { buildRoundRows } from "@/lib/round-rows";
+import { buildRoundRows, hasPlayerTurnElapsed } from "@/lib/round-rows";
 import { AvatarCircle } from "pixelarticons/react/AvatarCircle";
 import { Fragment } from "react";
 
@@ -21,6 +21,9 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
         turn: game.turn,
         resultWordNumber: game.result?.wordNumber,
     });
+    const currentPlayerIndex = game.players.findIndex(
+        (player) => player.publicId === game.turn?.currentPlayerPublicId,
+    );
 
     return (
         <section className="mt-7 overflow-x-auto">
@@ -78,7 +81,7 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                                         Tour {round.roundNumber}
                                     </span>
                                 </th>
-                                {game.players.map((player) => {
+                                {game.players.map((player, playerIndex) => {
                                     const clue = game.clues.find(
                                         (item) =>
                                             item.playerPublicId === player.publicId &&
@@ -90,6 +93,13 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                                         game.turn?.currentPlayerPublicId === player.publicId &&
                                         game.turn.wordNumber === round.wordNumber &&
                                         game.turn.roundNumber === round.roundNumber;
+                                    const hasTurnElapsed = hasPlayerTurnElapsed({
+                                        phase: game.phase,
+                                        row: round,
+                                        turn: game.turn,
+                                        playerIndex,
+                                        currentPlayerIndex,
+                                    });
 
                                     return (
                                         <td
@@ -101,7 +111,9 @@ export function RoundGrid({ game, connectedPlayerPublicIds }: RoundGridProps) {
                                                     ? player.isSelf
                                                         ? "À ton tour"
                                                         : "En train de jouer"
-                                                    : "Aucun mot saisi"
+                                                    : hasTurnElapsed
+                                                        ? "Aucun mot saisi"
+                                                        : null
                                             )}
                                         </td>
                                     );

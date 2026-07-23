@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRoundRows } from "@/lib/round-rows";
+import { buildRoundRows, hasPlayerTurnElapsed } from "@/lib/round-rows";
 
 const clues = [
   { wordNumber: 2, roundNumber: 1 },
@@ -67,4 +67,46 @@ test("the final game summary contains every round grouped by word", () => {
       { wordNumber: 2, roundNumber: 2 },
     ],
   );
+});
+
+test("only elapsed turns display a missing clue during discussion", () => {
+  const turn = { wordNumber: 1, roundNumber: 1 };
+
+  assert.equal(hasPlayerTurnElapsed({
+    phase: "DISCUSSION",
+    row: turn,
+    turn,
+    playerIndex: 0,
+    currentPlayerIndex: 0,
+  }), false);
+  assert.equal(hasPlayerTurnElapsed({
+    phase: "DISCUSSION",
+    row: turn,
+    turn,
+    playerIndex: 1,
+    currentPlayerIndex: 0,
+  }), false);
+  assert.equal(hasPlayerTurnElapsed({
+    phase: "DISCUSSION",
+    row: turn,
+    turn,
+    playerIndex: 0,
+    currentPlayerIndex: 1,
+  }), true);
+});
+
+test("missing clues are expired in completed rounds and result screens", () => {
+  assert.equal(hasPlayerTurnElapsed({
+    phase: "DISCUSSION",
+    row: { wordNumber: 1, roundNumber: 1 },
+    turn: { wordNumber: 1, roundNumber: 2 },
+    playerIndex: 2,
+    currentPlayerIndex: 0,
+  }), true);
+  assert.equal(hasPlayerTurnElapsed({
+    phase: "RESULTS",
+    row: { wordNumber: 1, roundNumber: 1 },
+    playerIndex: 2,
+    currentPlayerIndex: -1,
+  }), true);
 });

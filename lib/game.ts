@@ -2,7 +2,10 @@ import { randomInt, randomUUID } from "node:crypto";
 import { PlayerRole, Prisma, RoomPhase } from "@/generated/prisma/client";
 import { selectVisibleWordItems } from "@/lib/current-word";
 import { PublicError } from "@/lib/errors";
-import { shouldPreservePlayerAfterDeparture } from "@/lib/player-departure";
+import {
+  shouldEndGameAfterDeparture,
+  shouldPreservePlayerAfterDeparture,
+} from "@/lib/player-departure";
 import { hasMinimumConnectedPlayers } from "@/lib/player-presence";
 import { prisma } from "@/lib/prisma";
 import type { PlayerSessionCredential } from "@/lib/session-token";
@@ -200,7 +203,11 @@ export async function removePlayer(code: string, playerId: string) {
     const departingPlayerIndex = room?.players.findIndex((player) => player.id === playerId) ?? -1;
 
     if (!room || departingPlayerIndex < 0) return false;
-    if (shouldPreservePlayerAfterDeparture(room.phase, room.wordNumber >= room.wordCount)) {
+    if (shouldPreservePlayerAfterDeparture(
+      room.phase,
+      room.wordNumber >= room.wordCount,
+      room.winner !== null,
+    )) {
       return false;
     }
 
@@ -212,6 +219,14 @@ export async function removePlayer(code: string, playerId: string) {
       return true;
     }
 
+    if (shouldEndGameAfterDeparture(room.phase, remainingPlayers.length)) {
+      await transaction.room.update({
+        where: { id: room.id },
+        data: { phase: RoomPhase.RESULTS, winner: null, turnEndsAt: null },
+      });
+      return false;
+    }
+
     await transaction.player.delete({ where: { id: playerId } });
 
     if (room.hostId === departingPlayer.id) {
@@ -219,14 +234,6 @@ export async function removePlayer(code: string, playerId: string) {
         where: { id: room.id },
         data: { hostId: remainingPlayers[0].id },
       });
-    }
-
-    if (room.phase !== RoomPhase.LOBBY && remainingPlayers.length < 3) {
-      await transaction.room.update({
-        where: { id: room.id },
-        data: { phase: RoomPhase.RESULTS, winner: null, turnEndsAt: null },
-      });
-      return true;
     }
 
     if (room.phase === RoomPhase.DISCUSSION) {

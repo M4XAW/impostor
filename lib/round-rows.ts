@@ -14,6 +14,34 @@ interface BuildRoundRowsOptions {
   resultWordNumber?: number;
 }
 
+interface HasPlayerTurnElapsedOptions {
+  phase: GamePhase;
+  row: RoundRow;
+  turn?: RoundRow;
+  playerIndex: number;
+  currentPlayerIndex: number;
+}
+
+export function hasPlayerTurnElapsed({
+  phase,
+  row,
+  turn,
+  playerIndex,
+  currentPlayerIndex,
+}: HasPlayerTurnElapsedOptions) {
+  if (phase === "VOTING" || phase === "RESULTS") return true;
+  if (phase !== "DISCUSSION" || !turn) return false;
+
+  if (row.wordNumber !== turn.wordNumber) {
+    return row.wordNumber < turn.wordNumber;
+  }
+  if (row.roundNumber !== turn.roundNumber) {
+    return row.roundNumber < turn.roundNumber;
+  }
+
+  return playerIndex < currentPlayerIndex;
+}
+
 export function buildRoundRows({
   clues,
   phase,
