@@ -1,3 +1,5 @@
+import { logError } from "@/lib/logger";
+
 export class PublicError extends Error {
   constructor(
     message: string,
@@ -13,6 +15,6 @@ export function publicErrorResponse(error: unknown, fallbackMessage: string) {
     return Response.json({ error: error.message }, { status: error.status });
   }
 
-  console.error(fallbackMessage, error);
+  logError("request.unexpected_error", error, { fallbackMessage });
   return Response.json({ error: fallbackMessage }, { status: 500 });
 }

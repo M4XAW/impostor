@@ -3,8 +3,10 @@ import { createServer, type IncomingMessage } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
 import { advanceExpiredTurn, getNextTurnExpiration, removePlayer } from "@/lib/game";
+import { logError, logInfo } from "@/lib/logger";
 import { getCookieValue, roomSessionCookieName } from "@/lib/player-cookie";
 import { markPlayerConnected, markPlayerDisconnected } from "@/lib/player-presence";
+import { prisma } from "@/lib/prisma";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import {
   notifyRoomChanged,
@@ -140,30 +142,34 @@ void app.prepare().then(async () => {
             void scheduleNextTurnExpiration();
           })
           .catch((error: unknown) => {
-            console.error("Impossible de faire avancer le tour expiré.", error);
+            logError("turn.expiration_advance_failed", error, {
+              roomCode: nextExpiration.code,
+            });
             void scheduleNextTurnExpiration();
           });
       }, delay);
     } catch (error) {
       if (scheduleVersion !== turnScheduleVersion) return;
 
-      console.error("Impossible de programmer la prochaine fin de tour.", error);
+      logError("turn.expiration_schedule_failed", error);
     }
   }
 
-  subscribeToAnyRoomChange(() => void scheduleNextTurnExpiration());
-  setInterval(
+  const unsubscribeFromRoomChanges = subscribeToAnyRoomChange(
+    () => void scheduleNextTurnExpiration(),
+  );
+  const turnReconciliationInterval = setInterval(
     () => void scheduleNextTurnExpiration(),
     TURN_SCHEDULER_RECONCILIATION_MS,
   );
 
-  setInterval(() => {
+  const sessionRefreshInterval = setInterval(() => {
     const connectedPlayerIds = [...presenceByPlayer.values()]
       .filter((presence) => presence.socketIds.size > 0)
       .map((presence) => presence.playerId);
 
     void touchPlayerSessions(connectedPlayerIds).catch((error: unknown) => {
-      console.error("Impossible de rafraîchir la présence des joueurs.", error);
+      logError("presence.session_refresh_failed", error);
     });
   }, 30_000);
 
@@ -291,7 +297,10 @@ void app.prepare().then(async () => {
                 emitRoomPresence(code);
               })
               .catch((error: unknown) => {
-                console.error("Impossible de retirer le joueur déconnecté.", error);
+                logError("presence.player_removal_failed", error, {
+                  roomCode: code,
+                  playerPublicId: presence.playerPublicId,
+                });
               });
           }, DISCONNECTION_GRACE_PERIOD_MS);
         });
@@ -303,7 +312,62 @@ void app.prepare().then(async () => {
 
   await scheduleNextTurnExpiration();
 
+  let isShuttingDown = false;
+
+  function shutdown(signal: "SIGINT" | "SIGTERM") {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    logInfo("server.shutdown_started", { signal });
+
+    if (scheduledTurnTimer) clearTimeout(scheduledTurnTimer);
+    clearInterval(turnReconciliationInterval);
+    clearInterval(sessionRefreshInterval);
+    unsubscribeFromRoomChanges();
+    roomSubscriptions.forEach((subscription) => subscription.unsubscribe());
+    roomSubscriptions.clear();
+    presenceByPlayer.forEach((presence) => {
+      if (presence.removalTimer) clearTimeout(presence.removalTimer);
+    });
+
+    const forcedShutdownTimer = setTimeout(() => {
+      logError(
+        "server.shutdown_timeout",
+        new Error("Graceful shutdown exceeded 10 seconds."),
+        { signal },
+      );
+      process.exit(1);
+    }, 10_000);
+    forcedShutdownTimer.unref();
+
+    io.close((serverError) => {
+      void prisma
+        .$disconnect()
+        .catch((databaseError: unknown) => {
+          logError("server.database_disconnect_failed", databaseError);
+        })
+        .finally(() => {
+          clearTimeout(forcedShutdownTimer);
+          if (serverError) {
+            logError("server.shutdown_failed", serverError, { signal });
+          } else {
+            logInfo("server.shutdown_completed", { signal });
+          }
+          process.exit(serverError ? 1 : 0);
+        });
+    });
+  }
+
+  process.once("SIGINT", () => shutdown("SIGINT"));
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
+
   server.listen(port, hostname, () => {
-    console.log(`Impostor est disponible sur http://localhost:${port}`);
+    logInfo("server.started", {
+      hostname,
+      port,
+      environment: process.env.NODE_ENV ?? "development",
+    });
   });
+}).catch((error: unknown) => {
+  logError("server.start_failed", error);
+  process.exitCode = 1;
 });
