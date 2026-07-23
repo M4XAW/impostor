@@ -9,6 +9,7 @@ import { GameRulesDialog } from "@/components/game-rules-dialog";
 import { LeaveRoomDialog } from "@/components/leave-room-dialog";
 import { RoundGrid } from "@/components/round-grid";
 import { TransferHostContextMenu } from "@/components/transfer-host-context-menu";
+import { TurnCountdown } from "@/components/turn-countdown";
 import { VoteConfirmationDialog } from "@/components/vote-confirmation-dialog";
 import { VoteResults } from "@/components/vote-results";
 import {
@@ -345,6 +346,7 @@ export function RoomClient({ code }: RoomClientProps) {
     const secondsLeft = game.turn
         ? getCountdownSeconds(Date.parse(game.turn.endsAt), now + serverClockOffsetMs)
         : 0;
+    const isTurnEndingSoon = secondsLeft <= 10;
     const canSubmitClue = game.phase === "DISCUSSION" && game.turn?.currentPlayerPublicId === selfPlayer?.publicId;
     const canStartGame = game.phase === "LOBBY" && isHost;
     const canBeginVote = game.phase === "DISCUSSION" && isHost && game.turn?.canStartVote === true;
@@ -452,19 +454,23 @@ export function RoomClient({ code }: RoomClientProps) {
                         )}
 
                         {game.phase === "DISCUSSION" && game.turn && (
-                            <div className="mt-5 flex items-center justify-between border border-orange-400/20 bg-orange-400/10 p-4">
+                            <div
+                                className={`mt-5 flex items-center justify-between border p-4 ${
+                                    isTurnEndingSoon
+                                        ? "border-red-400/70 bg-red-500/15 text-red-200"
+                                        : "border-orange-400/20 bg-orange-400/10"
+                                }`}
+                            >
                                 <div>
                                     <p>
                                         {currentTurnPlayer?.name}
                                         {canSubmitClue ? " — c’est toi" : ""}
                                     </p>
-                                    <p className="mt-1 text-sm text-foreground">
+                                    <p className={`mt-1 text-sm ${isTurnEndingSoon ? "text-red-200/80" : "text-foreground"}`}>
                                         Manche {game.turn.wordNumber}/{game.settings.wordCount} · tour {game.turn.roundNumber}/{game.settings.roundCount}
                                     </p>
                                 </div>
-                                <strong className="text-3xl tabular-nums text-orange-300">
-                                    {secondsLeft}s
-                                </strong>
+                                <TurnCountdown secondsLeft={secondsLeft} />
                             </div>
                         )}
 
